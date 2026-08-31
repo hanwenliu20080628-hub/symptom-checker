@@ -1,0 +1,6 @@
+# Railway 后端部署配置
+# Railway 会自动检测 Node 项目；此文件用于明确构建与启动命令
+[build]
+builder = "NIXPACKS"
+buildCommand = "npm install"
+startCommand = "npm start"

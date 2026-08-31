@@ -1,0 +1,17 @@
+{
+  "name": "symptom-checker-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "人体症状自诊系统后端服务（调用 DeepSeek API）",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

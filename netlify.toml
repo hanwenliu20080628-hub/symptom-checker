@@ -1,0 +1,9 @@
+# Netlify 前端部署配置（纯静态，本地已构建 out/，直接上传）
+[build]
+  publish = "out"
+
+# 单页应用回退（静态导出下所有路由回退到 index.html）
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
