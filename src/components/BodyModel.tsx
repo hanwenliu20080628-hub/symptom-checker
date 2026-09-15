@@ -23,6 +23,8 @@ interface BodyModelProps {
   interactionMode?: "rotate" | "pan";
   /** 递增信号：变化时把相机回到初始位置 */
   resetSignal?: number;
+  /** 多选模式下已选中的 marker id 列表，命中的点渲染为蓝色闪烁小点 */
+  selectedIds?: string[];
 }
 
 // ========== 坐标 → 身体部位映射 ==========
@@ -87,6 +89,8 @@ function MarkerDotSphere({
   marker,
   size,
   isHovered,
+  isSelected = false,
+  selectedSize,
   onClick,
   onPointerOver,
   onPointerOut,
@@ -94,19 +98,29 @@ function MarkerDotSphere({
   marker: MarkerDot;
   size: number;
   isHovered: boolean;
+  isSelected?: boolean;
+  selectedSize?: number;
   onClick: () => void;
   onPointerOver: () => void;
   onPointerOut: () => void;
 }) {
   const ref = useRef<THREE.Mesh>(null);
   const glowRef = useRef<THREE.Mesh>(null);
+  const selectedMatRef = useRef<THREE.MeshStandardMaterial>(null);
 
   // 各层尺寸基于中心红点半径 size 缩放
   const coreRadius = size;
   const glowRadius = size * 1.8;
   const hitRadius = size * 4;
 
-  useFrame((_, delta) => {
+  useFrame(() => {
+    // 选中态：蓝色闪烁（发光强度周期性变化）
+    if (isSelected) {
+      if (selectedMatRef.current) {
+        selectedMatRef.current.emissiveIntensity = 1.1 + Math.sin(Date.now() * 0.008) * 1.0;
+      }
+      return;
+    }
     if (ref.current) {
       const scale = isHovered ? 1.7 : 1 + Math.sin(Date.now() * 0.004 + marker.position[1]) * 0.2;
       ref.current.scale.setScalar(scale);
@@ -126,6 +140,44 @@ function MarkerDotSphere({
     onPointerOver: (e: ThreeEvent<MouseEvent>) => { e.stopPropagation(); onPointerOver(); },
     onPointerOut: (e: ThreeEvent<MouseEvent>) => { e.stopPropagation(); onPointerOut(); },
   };
+
+  // 选中态：渲染为蓝色闪烁小点（大小≈白点），再次点击可取消选中
+  if (isSelected) {
+    const r = selectedSize ?? size;
+    return (
+      <group>
+        {/* 隐形碰撞球（可点击区域） */}
+        <mesh
+          position={marker.position}
+          onClick={handleEvent.onClick}
+          onPointerOver={handleEvent.onPointerOver}
+          onPointerOut={handleEvent.onPointerOut}
+        >
+          <sphereGeometry args={[r * 4, 16, 16]} />
+          <meshBasicMaterial transparent opacity={0} depthTest={true} />
+        </mesh>
+        {/* 蓝色闪烁点 */}
+        <mesh
+          position={marker.position}
+          onClick={handleEvent.onClick}
+          onPointerOver={handleEvent.onPointerOver}
+          onPointerOut={handleEvent.onPointerOut}
+        >
+          <sphereGeometry args={[r, 16, 16]} />
+          <meshStandardMaterial
+            ref={selectedMatRef}
+            color="#3b82f6"
+            emissive="#60a5fa"
+            emissiveIntensity={1.5}
+            toneMapped={false}
+            roughness={1}
+            metalness={0}
+            depthTest={true}
+          />
+        </mesh>
+      </group>
+    );
+  }
 
   return (
     <group>
@@ -173,8 +225,10 @@ function MarkerDotSphere({
 // ========== 标记点集合 ==========
 function BodyPartMarkers({
   onMarkerClick,
+  selectedIds = [],
 }: {
   onMarkerClick: (id: string, name: string) => void;
+  selectedIds?: string[];
 }) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const gltf = useGLTF("/models/human_body.glb");
@@ -233,6 +287,8 @@ function BodyPartMarkers({
 
   // 读取标记点大小
   const markerSize = useMemo(() => getMarkerSize(), [version]);
+  // 选中态蓝点统一用白点大小（"大小跟白点差不多"）
+  const whiteDotSize = useMemo(() => getWhiteDotSize(), [version]);
 
   return (
     <group>
@@ -242,6 +298,8 @@ function BodyPartMarkers({
           marker={marker}
           size={markerSize}
           isHovered={hoveredId === marker.id}
+          isSelected={selectedIds.includes(marker.id)}
+          selectedSize={whiteDotSize}
           onClick={() => onMarkerClick(marker.id, marker.name)}
           onPointerOver={() => setHoveredId(marker.id)}
           onPointerOut={() => setHoveredId(null)}
@@ -256,6 +314,7 @@ function WhiteDotSphere({
   dot,
   size,
   isHovered,
+  isSelected = false,
   onClick,
   onPointerOver,
   onPointerOut,
@@ -263,15 +322,59 @@ function WhiteDotSphere({
   dot: WhiteDot;
   size: number;
   isHovered: boolean;
+  isSelected?: boolean;
   onClick: () => void;
   onPointerOver: () => void;
   onPointerOut: () => void;
 }) {
+  const selectedMatRef = useRef<THREE.MeshStandardMaterial>(null);
+
+  useFrame(() => {
+    if (isSelected && selectedMatRef.current) {
+      selectedMatRef.current.emissiveIntensity = 1.1 + Math.sin(Date.now() * 0.008) * 1.0;
+    }
+  });
+
   const handleEvent = {
     onClick: (e: ThreeEvent<MouseEvent>) => { e.stopPropagation(); onClick(); },
     onPointerOver: (e: ThreeEvent<MouseEvent>) => { e.stopPropagation(); onPointerOver(); },
     onPointerOut: (e: ThreeEvent<MouseEvent>) => { e.stopPropagation(); onPointerOut(); },
   };
+
+  // 选中态：蓝色闪烁小点（大小=白点本身大小），再次点击可取消选中
+  if (isSelected) {
+    return (
+      <group>
+        <mesh
+          position={dot.position}
+          onClick={handleEvent.onClick}
+          onPointerOver={handleEvent.onPointerOver}
+          onPointerOut={handleEvent.onPointerOut}
+        >
+          <sphereGeometry args={[size * 4, 16, 16]} />
+          <meshBasicMaterial transparent opacity={0} depthTest={true} />
+        </mesh>
+        <mesh
+          position={dot.position}
+          onClick={handleEvent.onClick}
+          onPointerOver={handleEvent.onPointerOver}
+          onPointerOut={handleEvent.onPointerOut}
+        >
+          <sphereGeometry args={[size, 16, 16]} />
+          <meshStandardMaterial
+            ref={selectedMatRef}
+            color="#3b82f6"
+            emissive="#60a5fa"
+            emissiveIntensity={1.5}
+            toneMapped={false}
+            roughness={1}
+            metalness={0}
+            depthTest={true}
+          />
+        </mesh>
+      </group>
+    );
+  }
 
   return (
     <group>
@@ -310,8 +413,10 @@ function WhiteDotSphere({
 
 function WhiteDots({
   onDotClick,
+  selectedIds = [],
 }: {
   onDotClick: (id: string, name: string) => void;
+  selectedIds?: string[];
 }) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
@@ -332,6 +437,7 @@ function WhiteDots({
           dot={dot}
           size={size}
           isHovered={hoveredId === dot.id}
+          isSelected={selectedIds.includes(dot.id)}
           onClick={() => onDotClick(dot.id, dot.name)}
           onPointerOver={() => setHoveredId(dot.id)}
           onPointerOut={() => setHoveredId(null)}
@@ -389,7 +495,7 @@ function RealHumanModel({
 }
 
 // ========== 主组件 ==========
-export default function BodyModel({ onPartClick, interactionMode = "rotate", resetSignal = 0 }: BodyModelProps) {
+export default function BodyModel({ onPartClick, interactionMode = "rotate", resetSignal = 0, selectedIds = [] }: BodyModelProps) {
   const handleMeshClick = useCallback(
     (id: string, name?: string) => {
       onPartClick(id, name);
@@ -428,8 +534,8 @@ export default function BodyModel({ onPartClick, interactionMode = "rotate", res
           <directionalLight position={[-3, 3, -3]} intensity={0.4} />
 
           <RealHumanModel onMeshClick={handleMeshClick} />
-          <BodyPartMarkers onMarkerClick={handleMeshClick} />
-          <WhiteDots onDotClick={handleMeshClick} />
+          <BodyPartMarkers onMarkerClick={handleMeshClick} selectedIds={selectedIds} />
+          <WhiteDots onDotClick={handleMeshClick} selectedIds={selectedIds} />
 
           <OrbitControls
             ref={controlsRef}

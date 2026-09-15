@@ -30,8 +30,22 @@ export default function Home() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [interactionMode, setInteractionMode] = useState<"rotate" | "pan">("rotate");
   const [resetSignal, setResetSignal] = useState(0);
+  // 多选模式：multiSelect 开关 + 已选部位列表（id 用于蓝点渲染，name 用于提交）
+  const [multiSelect, setMultiSelect] = useState(false);
+  const [multiParts, setMultiParts] = useState<{ id: string; name: string }[]>([]);
 
   const handlePartClick = useCallback((meshName: string, customName?: string) => {
+    // 多选模式：切换该部位的选中状态（再点一次取消），不打开症状对话框
+    if (multiSelect) {
+      setMultiParts((prev) => {
+        const exists = prev.some((p) => p.id === meshName);
+        if (exists) return prev.filter((p) => p.id !== meshName);
+        const part = findBodyPartByMesh(meshName);
+        const name = customName ?? part?.name ?? meshName;
+        return [...prev, { id: meshName, name }];
+      });
+      return;
+    }
     const part = findBodyPartByMesh(meshName);
     if (part) {
       // 红点改名后，点击应显示改名后的名称（customName 优先）
@@ -50,7 +64,7 @@ export default function Home() {
     setPhase("selecting");
     setResult(null);
     setError(null);
-  }, []);
+  }, [multiSelect]);
 
   const handleCloseDialog = useCallback(() => {
     if (phase === "selecting") {
@@ -98,6 +112,35 @@ export default function Home() {
     setError(null);
   }, []);
 
+  // 多选按钮：进入多选模式 / 点击「完成」提交所选部位
+  const handleMultiSelectToggle = useCallback(() => {
+    if (!multiSelect) {
+      // 进入多选模式：清空选择，并收起可能打开的单选对话框
+      setMultiSelect(true);
+      setMultiParts([]);
+      if (phase === "selecting") {
+        setPhase("idle");
+        setSelectedPart(null);
+      }
+      return;
+    }
+    // 点击「完成」：把已选部位合并为一个查询对象，跳转到症状描述步骤
+    if (multiParts.length > 0) {
+      setSelectedPart({
+        id: multiParts.map((p) => p.id).join(","),
+        name: multiParts.map((p) => p.name).join("、"),
+        meshNames: [],
+        category: "other",
+      });
+      setResult(null);
+      setError(null);
+      setPhase("selecting");
+    }
+    // 退出多选模式并清空蓝点（按钮文字随 multiSelect 变回「多选」）
+    setMultiSelect(false);
+    setMultiParts([]);
+  }, [multiSelect, multiParts, phase]);
+
   return (
     <>
       <DisclaimerBar />
@@ -115,7 +158,7 @@ export default function Home() {
 
         {/* 3D 模型区（右上角悬浮：调整标记点 / 旋转·平移模式 / 回到初始位置） */}
         <div className="w-full flex-1 flex items-start justify-center relative">
-          <BodyModel onPartClick={handlePartClick} interactionMode={interactionMode} resetSignal={resetSignal} />
+          <BodyModel onPartClick={handlePartClick} interactionMode={interactionMode} resetSignal={resetSignal} selectedIds={multiParts.map((p) => p.id)} />
           <div className="absolute top-0 right-0 z-10 flex flex-col items-end gap-2">
             <button
               onClick={() => setEditorOpen(true)}
@@ -173,14 +216,39 @@ export default function Home() {
               </svg>
               回到初始位置
             </button>
+            <button
+              onClick={handleMultiSelectToggle}
+              className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors shadow-sm inline-flex items-center gap-1.5 ${
+                multiSelect
+                  ? "text-blue-700 bg-blue-50 border-blue-300"
+                  : "text-gray-600 bg-white border-gray-200 hover:bg-gray-50 hover:border-gray-300"
+              }`}
+              title={
+                multiSelect
+                  ? "点击完成，进入症状描述"
+                  : "进入多选模式，可连续点选多个部位"
+              }
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="9 11 12 14 22 4" />
+                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+              </svg>
+              {multiSelect ? `完成${multiParts.length > 0 ? `(${multiParts.length})` : ""}` : "多选"}
+            </button>
           </div>
         </div>
 
         {/* 状态提示 */}
-        {phase === "idle" && !selectedPart && (
-          <p className="mt-2 text-sm text-gray-400 text-center">
-            💡 点击人体模型上的任意部位开始
+        {multiSelect ? (
+          <p className="mt-2 text-sm text-blue-600 text-center font-medium">
+            多选模式：点击模型上的部位点进行选择，已选 {multiParts.length} 个，选完点右上角「完成」
           </p>
+        ) : (
+          phase === "idle" && !selectedPart && (
+            <p className="mt-2 text-sm text-gray-400 text-center">
+              💡 点击人体模型上的任意部位开始
+            </p>
+          )
         )}
 
         {phase === "selecting" && selectedPart && (
