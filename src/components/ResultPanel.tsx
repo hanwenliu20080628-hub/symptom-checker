@@ -1,12 +1,15 @@
 "use client";
 
 import { AnalyzeResult } from "@/types";
+import { TRIAGE_META, TriageLevel } from "@/lib/triage";
 import { useState } from "react";
 
 interface ResultPanelProps {
   result: AnalyzeResult;
   bodyPartName: string;
   onNewQuery: () => void;
+  /** 分诊等级（来自症状前问卷，可选） */
+  triageLevel?: TriageLevel | null;
 }
 
 const severityConfig = {
@@ -27,6 +30,7 @@ export default function ResultPanel({
   result,
   bodyPartName,
   onNewQuery,
+  triageLevel,
 }: ResultPanelProps) {
   const [saved, setSaved] = useState(false);
 
@@ -69,6 +73,19 @@ export default function ResultPanel({
           {sev.label}
         </span>
       </div>
+
+      {/* 分诊等级横幅（来自症状前问卷） */}
+      {triageLevel && (
+        <div
+          className={`px-6 py-3 border-b text-sm ${TRIAGE_META[triageLevel].bannerClass}`}
+        >
+          <span className="font-semibold">
+            {TRIAGE_META[triageLevel].emoji} 分诊：
+            {TRIAGE_META[triageLevel].label}
+          </span>
+          <span className="ml-2">{TRIAGE_META[triageLevel].advice}</span>
+        </div>
+      )}
 
       {/* 可能原因 */}
       <div className="px-6 py-4 border-b border-gray-50">

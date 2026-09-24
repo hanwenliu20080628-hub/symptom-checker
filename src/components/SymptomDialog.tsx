@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { TRIAGE_META, TriageLevel } from "@/lib/triage";
 
 interface SymptomDialogProps {
   bodyPartName: string;
@@ -8,6 +9,8 @@ interface SymptomDialogProps {
   onClose: () => void;
   onSubmit: (symptoms: string) => void;
   isAnalyzing: boolean;
+  /** 分诊等级（问卷完成后传入，显示提示横幅） */
+  triageLevel?: TriageLevel | null;
 }
 
 export default function SymptomDialog({
@@ -16,6 +19,7 @@ export default function SymptomDialog({
   onClose,
   onSubmit,
   isAnalyzing,
+  triageLevel,
 }: SymptomDialogProps) {
   const [symptoms, setSymptoms] = useState("");
 
@@ -82,6 +86,20 @@ export default function SymptomDialog({
             </svg>
           </button>
         </div>
+
+        {/* 分诊等级横幅 */}
+        {triageLevel && (
+          <div
+            className={`mx-6 mt-4 px-4 py-3 rounded-xl border text-sm leading-relaxed ${TRIAGE_META[triageLevel].bannerClass}`}
+          >
+            <span className="font-semibold">
+              {TRIAGE_META[triageLevel].emoji} 分诊结果：
+              {TRIAGE_META[triageLevel].label}
+            </span>
+            <br />
+            {TRIAGE_META[triageLevel].advice}
+          </div>
+        )}
 
         {/* 输入区 */}
         <div className="px-6 py-4">

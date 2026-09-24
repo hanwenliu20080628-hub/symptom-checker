@@ -5,10 +5,19 @@ import dynamic from "next/dynamic";
 import DisclaimerBar from "@/components/DisclaimerBar";
 import SymptomDialog from "@/components/SymptomDialog";
 import ResultPanel from "@/components/ResultPanel";
+import RedAlertPanel from "@/components/RedAlertPanel";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import MarkerEditor from "@/components/MarkerEditor";
+import TriageQuestionnaire from "@/components/TriageQuestionnaire";
 import { AnalyzeResult, BodyPart } from "@/types";
 import { findBodyPartByMesh } from "@/lib/body-parts";
+import {
+  triage,
+  toTriageData,
+  buildQuestionnaireSummary,
+  QuestionnaireData,
+  TriageLevel,
+} from "@/lib/triage";
 
 // 动态导入 Three.js 组件，避免 SSR 问题
 const BodyModel = dynamic(() => import("@/components/BodyModel"), {
@@ -20,7 +29,14 @@ const BodyModel = dynamic(() => import("@/components/BodyModel"), {
   ),
 });
 
-type Phase = "idle" | "selecting" | "analyzing" | "result" | "error";
+type Phase =
+  | "idle"
+  | "triage"
+  | "selecting"
+  | "analyzing"
+  | "result"
+  | "blocked"
+  | "error";
 
 export default function Home() {
   const [selectedPart, setSelectedPart] = useState<BodyPart | null>(null);
@@ -33,6 +49,9 @@ export default function Home() {
   // 多选模式：multiSelect 开关 + 已选部位列表（id 用于蓝点渲染，name 用于提交）
   const [multiSelect, setMultiSelect] = useState(false);
   const [multiParts, setMultiParts] = useState<{ id: string; name: string }[]>([]);
+  // 分诊问卷：23 题问卷数据 + 分诊等级（问卷完成后进入症状描述）
+  const [triageData, setTriageData] = useState<QuestionnaireData | null>(null);
+  const [triageLevel, setTriageLevel] = useState<TriageLevel | null>(null);
 
   const handlePartClick = useCallback((meshName: string, customName?: string) => {
     // 多选模式：切换该部位的选中状态（再点一次取消），不打开症状对话框
@@ -61,7 +80,8 @@ export default function Home() {
     } else {
       return;
     }
-    setPhase("selecting");
+    // 选中部位后先进入分诊问卷，问卷完成后再描述症状
+    setPhase("triage");
     setResult(null);
     setError(null);
   }, [multiSelect]);
@@ -70,8 +90,31 @@ export default function Home() {
     if (phase === "selecting") {
       setPhase("idle");
       setSelectedPart(null);
+      setTriageData(null);
+      setTriageLevel(null);
     }
   }, [phase]);
+
+  // 问卷完成：映射为分诊规则输入并计算等级
+  const handleTriageComplete = useCallback((data: QuestionnaireData) => {
+    const level = triage(toTriageData(data));
+    setTriageData(data);
+    setTriageLevel(level);
+    // 红色警示：存在需尽快线下评估的严重信号，终止康复流程，不进入症状描述
+    if (level === "RED") {
+      setPhase("blocked");
+    } else {
+      setPhase("selecting");
+    }
+  }, []);
+
+  // 问卷关闭：回到初始状态
+  const handleTriageClose = useCallback(() => {
+    setPhase("idle");
+    setSelectedPart(null);
+    setTriageData(null);
+    setTriageLevel(null);
+  }, []);
 
   const handleSubmit = useCallback(
     async (symptoms: string) => {
@@ -83,10 +126,15 @@ export default function Home() {
       try {
         // 调用后端分析接口（NEXT_PUBLIC_API_URL 指向 Railway 后端；未配置则用相对路径，适用于本地 Next.js API 路由）
         const apiBase = process.env.NEXT_PUBLIC_API_URL || "";
+        // 分诊问卷摘要拼在症状描述前，作为 AI 分析上下文（不改变 API 契约）
+        const fullSymptoms =
+          triageData && triageLevel
+            ? `【分诊问卷】\n${buildQuestionnaireSummary(triageData, triageLevel)}\n【症状描述】${symptoms}`
+            : symptoms;
         const response = await fetch(`${apiBase}/api/analyze`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ bodyPart: selectedPart.name, symptoms }),
+          body: JSON.stringify({ bodyPart: selectedPart.name, symptoms: fullSymptoms }),
         });
 
         if (!response.ok) {
@@ -102,7 +150,7 @@ export default function Home() {
         setPhase("error");
       }
     },
-    [selectedPart]
+    [selectedPart, triageData, triageLevel]
   );
 
   const handleNewQuery = useCallback(() => {
@@ -110,21 +158,25 @@ export default function Home() {
     setSelectedPart(null);
     setResult(null);
     setError(null);
+    setTriageData(null);
+    setTriageLevel(null);
   }, []);
 
   // 多选按钮：进入多选模式 / 点击「完成」提交所选部位
   const handleMultiSelectToggle = useCallback(() => {
     if (!multiSelect) {
-      // 进入多选模式：清空选择，并收起可能打开的单选对话框
+      // 进入多选模式：清空选择，并收起可能打开的单选对话框/问卷/警示卡片
       setMultiSelect(true);
       setMultiParts([]);
-      if (phase === "selecting") {
+      if (phase === "selecting" || phase === "triage" || phase === "blocked") {
         setPhase("idle");
         setSelectedPart(null);
+        setTriageData(null);
+        setTriageLevel(null);
       }
       return;
     }
-    // 点击「完成」：把已选部位合并为一个查询对象，跳转到症状描述步骤
+    // 点击「完成」：把已选部位合并为一个查询对象，跳转到分诊问卷（之后才是症状描述）
     if (multiParts.length > 0) {
       setSelectedPart({
         id: multiParts.map((p) => p.id).join(","),
@@ -134,7 +186,7 @@ export default function Home() {
       });
       setResult(null);
       setError(null);
-      setPhase("selecting");
+      setPhase("triage");
     }
     // 退出多选模式并清空蓝点（按钮文字随 multiSelect 变回「多选」）
     setMultiSelect(false);
@@ -251,7 +303,7 @@ export default function Home() {
           )
         )}
 
-        {phase === "selecting" && selectedPart && (
+        {(phase === "selecting" || phase === "triage") && selectedPart && (
           <p className="mt-2 text-sm text-blue-600 text-center font-medium">
             已选中：{selectedPart.name}
           </p>
@@ -281,6 +333,16 @@ export default function Home() {
             result={result}
             bodyPartName={selectedPart.name}
             onNewQuery={handleNewQuery}
+            triageLevel={triageLevel}
+          />
+        )}
+
+        {/* 红色警示（分诊为红色：终止康复流程，不进入症状描述） */}
+        {phase === "blocked" && selectedPart && (
+          <RedAlertPanel
+            bodyPartName={selectedPart.name}
+            questionnaire={triageData}
+            onRestart={handleNewQuery}
           />
         )}
       </main>
@@ -290,6 +352,15 @@ export default function Home() {
         本工具仅供信息参考，不构成医疗诊断。如有不适，请及时就医。
       </footer>
 
+      {/* 分诊问卷弹窗（选部位后、描述症状前） */}
+      <TriageQuestionnaire
+        key={`triage-${selectedPart?.id ?? "empty"}`}
+        bodyPartName={selectedPart?.name || ""}
+        isOpen={phase === "triage"}
+        onClose={handleTriageClose}
+        onComplete={handleTriageComplete}
+      />
+
       {/* 症状输入弹窗 */}
       <SymptomDialog
         key={selectedPart?.id ?? "empty"}
@@ -298,6 +369,7 @@ export default function Home() {
         onClose={handleCloseDialog}
         onSubmit={handleSubmit}
         isAnalyzing={false}
+        triageLevel={triageLevel}
       />
 
       {/* 标记点编辑面板 */}
