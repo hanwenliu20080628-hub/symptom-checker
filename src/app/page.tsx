@@ -6,6 +6,7 @@ import DisclaimerBar from "@/components/DisclaimerBar";
 import SymptomDialog from "@/components/SymptomDialog";
 import ResultPanel from "@/components/ResultPanel";
 import RedAlertPanel from "@/components/RedAlertPanel";
+import FeedbackSurvey from "@/components/FeedbackSurvey";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import MarkerEditor from "@/components/MarkerEditor";
 import TriageQuestionnaire from "@/components/TriageQuestionnaire";
@@ -329,12 +330,16 @@ export default function Home() {
 
         {/* 结果 */}
         {phase === "result" && result && selectedPart && (
-          <ResultPanel
-            result={result}
-            bodyPartName={selectedPart.name}
-            onNewQuery={handleNewQuery}
-            triageLevel={triageLevel}
-          />
+          <>
+            <ResultPanel
+              result={result}
+              bodyPartName={selectedPart.name}
+              onNewQuery={handleNewQuery}
+              triageLevel={triageLevel}
+            />
+            {/* 使用完网站后：用户反馈调查 */}
+            <FeedbackSurvey bodyPartName={selectedPart.name} />
+          </>
         )}
 
         {/* 红色警示（分诊为红色：终止康复流程，不进入症状描述） */}
