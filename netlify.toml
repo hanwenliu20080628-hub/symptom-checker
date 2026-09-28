@@ -2,6 +2,16 @@
 [build]
   publish = "out"
 
+# 服务端函数（承载 AI 分析接口，Key 不暴露在前端）
+[functions]
+  directory = "netlify/functions"
+
+# AI 分析接口重定向到 serverless function（必须放在 SPA 回退之前）
+[[redirects]]
+  from = "/api/analyze"
+  to = "/.netlify/functions/analyze"
+  status = 200
+
 # 单页应用回退（静态导出下所有路由回退到 index.html）
 [[redirects]]
   from = "/*"
