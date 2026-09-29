@@ -63,19 +63,31 @@ function parseAIResponse(text) {
   };
 }
 
+// CORS 头：允许任意来源跨域调用（千问等第三方托管/代理域名下的前端直连本接口时必须）
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+};
+
 export default async function handler(req) {
+  // 预检请求（浏览器跨域 POST 前会自动发 OPTIONS）
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: CORS_HEADERS });
+  }
+
   // 仅接受 POST
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), {
       status: 405,
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...CORS_HEADERS },
     });
   }
 
   const json = (data, status = 200) =>
     new Response(JSON.stringify(data), {
       status,
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...CORS_HEADERS },
     });
 
   try {

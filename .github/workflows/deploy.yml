@@ -22,6 +22,10 @@ jobs:
 
       - name: Build
         run: npm run build
+        env:
+          # 前端 API 固定指向 Netlify 生产域名：保证同一份构建产物部署到任何静态平台（如千问）时，
+          # /api/analyze 都会跨域调回 Netlify Function，而不是打到当前静态站导致 404
+          NEXT_PUBLIC_API_URL: "https://symptom-checker-app.netlify.app"
 
       - name: Deploy to Netlify
         uses: nwtgck/actions-netlify@v3
