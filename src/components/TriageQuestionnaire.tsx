@@ -91,6 +91,8 @@ export default function TriageQuestionnaire({
 }: TriageQuestionnaireProps) {
   // 一、基础信息
   const [gender, setGender] = useState<QuestionnaireData["gender"] | null>(null);
+  const [identities, setIdentities] = useState<string[]>([]);
+  const [identitiesOther, setIdentitiesOther] = useState("");
   const [age, setAge] = useState<QuestionnaireData["age"] | null>(null);
   const [heightCm, setHeightCm] = useState("");
   const [weightKg, setWeightKg] = useState("");
@@ -187,6 +189,8 @@ export default function TriageQuestionnaire({
     if (!canSubmit) return;
     onComplete({
       gender,
+      identities,
+      identitiesOther,
       age,
       heightCm,
       weightKg,
@@ -267,7 +271,25 @@ export default function TriageQuestionnaire({
           </div>
 
           <div>
-            <Q>2. 您的年龄：</Q>
+            <Q>2. 您的身份：<span className="text-gray-400 font-normal">（可多选）</span></Q>
+            <div className="flex flex-wrap gap-2">
+              <OptionButton selected={identities.includes("athlete")} onClick={() => toggle(setIdentities, "athlete")}>运动员</OptionButton>
+              <OptionButton selected={identities.includes("student")} onClick={() => toggle(setIdentities, "student")}>学生</OptionButton>
+              <OptionButton selected={identities.includes("other")} onClick={() => toggle(setIdentities, "other")}>其他</OptionButton>
+            </div>
+            {identities.includes("other") && (
+              <input
+                type="text"
+                value={identitiesOther}
+                onChange={(e) => setIdentitiesOther(e.target.value)}
+                placeholder="请填写您的身份"
+                className="mt-2 w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+              />
+            )}
+          </div>
+
+          <div>
+            <Q>3. 您的年龄：</Q>
             <div className="flex flex-wrap gap-2">
               <OptionButton selected={age === "under_18"} onClick={() => setAge("under_18")}>18岁以下</OptionButton>
               <OptionButton selected={age === "18_30"} onClick={() => setAge("18_30")}>18–30岁</OptionButton>
@@ -278,7 +300,7 @@ export default function TriageQuestionnaire({
           </div>
 
           <div>
-            <Q>3. 您的身高和体重：<span className="text-gray-400 font-normal">（选填）</span></Q>
+            <Q>4. 您的身高和体重：<span className="text-gray-400 font-normal">（选填）</span></Q>
             <div className="flex gap-3">
               <div className="flex items-center gap-1.5 flex-1">
                 <input
@@ -304,7 +326,7 @@ export default function TriageQuestionnaire({
           </div>
 
           <div>
-            <Q>4. 您目前的运动频率：</Q>
+            <Q>5. 您目前的运动频率：</Q>
             <div className="flex flex-wrap gap-2">
               <OptionButton selected={exerciseFrequency === "none"} onClick={() => setExerciseFrequency("none")}>几乎不运动</OptionButton>
               <OptionButton selected={exerciseFrequency === "1_2"} onClick={() => setExerciseFrequency("1_2")}>每周1–2次</OptionButton>
@@ -314,7 +336,7 @@ export default function TriageQuestionnaire({
           </div>
 
           <div>
-            <Q>5. 您主要参与的运动类型：<span className="text-gray-400 font-normal">（可多选）</span></Q>
+            <Q>6. 您主要参与的运动类型：<span className="text-gray-400 font-normal">（可多选）</span></Q>
             <div className="flex flex-wrap gap-2">
               <OptionButton selected={sportTypes.includes("running")} onClick={() => toggle(setSportTypes, "running")}>跑步</OptionButton>
               <OptionButton selected={sportTypes.includes("ball")} onClick={() => toggle(setSportTypes, "ball")}>球类</OptionButton>
@@ -339,7 +361,7 @@ export default function TriageQuestionnaire({
           <SectionTitle>二、损伤详情</SectionTitle>
 
           <div>
-            <Q>6. 这次损伤是怎么发生的？</Q>
+            <Q>7. 这次损伤是怎么发生的？</Q>
             <div className="flex flex-wrap gap-2">
               <OptionButton selected={injuryMechanism === "acute"} onClick={() => setInjuryMechanism("acute")}>运动中急性扭伤或拉伤</OptionButton>
               <OptionButton selected={injuryMechanism === "chronic"} onClick={() => setInjuryMechanism("chronic")}>运动后逐渐加重的慢性疼痛</OptionButton>
@@ -359,7 +381,7 @@ export default function TriageQuestionnaire({
           </div>
 
           <div>
-            <Q>7. 损伤发生多久了？</Q>
+            <Q>8. 损伤发生多久了？</Q>
             <div className="flex flex-wrap gap-2">
               <OptionButton selected={injuryDuration === "under_3d"} onClick={() => setInjuryDuration("under_3d")}>3天以内</OptionButton>
               <OptionButton selected={injuryDuration === "3d_2w"} onClick={() => setInjuryDuration("3d_2w")}>3天–2周</OptionButton>
@@ -370,7 +392,7 @@ export default function TriageQuestionnaire({
           </div>
 
           <div>
-            <Q>8. 当时受伤时，是否听到“啪”或“撕裂”的声音？</Q>
+            <Q>9. 当时受伤时，是否听到“啪”或“撕裂”的声音？</Q>
             <div className="flex gap-2">
               <OptionButton selected={heardPopping === "yes"} onClick={() => setHeardPopping("yes")}>是</OptionButton>
               <OptionButton selected={heardPopping === "no"} onClick={() => setHeardPopping("no")}>否</OptionButton>
@@ -379,7 +401,7 @@ export default function TriageQuestionnaire({
           </div>
 
           <div>
-            <Q>9. 受伤后是否出现过以下情况？<span className="text-gray-400 font-normal">（可多选）</span></Q>
+            <Q>10. 受伤后是否出现过以下情况？<span className="text-gray-400 font-normal">（可多选）</span></Q>
             <div className="flex flex-wrap gap-2">
               <OptionButton selected={postInjurySigns.includes("swelling")} onClick={() => toggleWithNone(setPostInjurySigns, "swelling", "none")}>明显肿胀</OptionButton>
               <OptionButton selected={postInjurySigns.includes("bruising")} onClick={() => toggleWithNone(setPostInjurySigns, "bruising", "none")}>大面积淤青</OptionButton>
@@ -394,17 +416,17 @@ export default function TriageQuestionnaire({
           <SectionTitle>三、疼痛评估</SectionTitle>
 
           <div>
-            <Q>10. 您目前静息状态下的疼痛程度：<span className="text-gray-400 font-normal">（0 无痛，10 剧痛）</span></Q>
+            <Q>11. 您目前静息状态下的疼痛程度：<span className="text-gray-400 font-normal">（0 无痛，10 剧痛）</span></Q>
             <PainSlider value={painRest} onChange={setPainRest} />
           </div>
 
           <div>
-            <Q>11. 您运动或活动时的疼痛程度：<span className="text-gray-400 font-normal">（0 无痛，10 剧痛）</span></Q>
+            <Q>12. 您运动或活动时的疼痛程度：<span className="text-gray-400 font-normal">（0 无痛，10 剧痛）</span></Q>
             <PainSlider value={painActivity} onChange={setPainActivity} />
           </div>
 
           <div>
-            <Q>12. 您的疼痛性质是？<span className="text-gray-400 font-normal">（可多选）</span></Q>
+            <Q>13. 您的疼痛性质是？<span className="text-gray-400 font-normal">（可多选）</span></Q>
             <div className="flex flex-wrap gap-2">
               <OptionButton selected={painNature.includes("stabbing")} onClick={() => toggleWithNone(setPainNature, "stabbing", "unclear")}>刺痛</OptionButton>
               <OptionButton selected={painNature.includes("dull")} onClick={() => toggleWithNone(setPainNature, "dull", "unclear")}>钝痛</OptionButton>
@@ -417,7 +439,7 @@ export default function TriageQuestionnaire({
           </div>
 
           <div>
-            <Q>13. 什么情况下疼痛会加重？<span className="text-gray-400 font-normal">（可多选）</span></Q>
+            <Q>14. 什么情况下疼痛会加重？<span className="text-gray-400 font-normal">（可多选）</span></Q>
             <div className="flex flex-wrap gap-2">
               <OptionButton selected={painWorse.includes("weight_bearing")} onClick={() => toggleWithNone(setPainWorse, "weight_bearing", "no_pattern")}>负重</OptionButton>
               <OptionButton selected={painWorse.includes("specific_movement")} onClick={() => toggleWithNone(setPainWorse, "specific_movement", "no_pattern")}>特定动作</OptionButton>
@@ -429,7 +451,7 @@ export default function TriageQuestionnaire({
           </div>
 
           <div>
-            <Q>14. 什么情况下疼痛会减轻？<span className="text-gray-400 font-normal">（可多选）</span></Q>
+            <Q>15. 什么情况下疼痛会减轻？<span className="text-gray-400 font-normal">（可多选）</span></Q>
             <div className="flex flex-wrap gap-2">
               <OptionButton selected={painBetter.includes("rest")} onClick={() => toggleWithNone(setPainBetter, "rest", "none")}>休息</OptionButton>
               <OptionButton selected={painBetter.includes("heat")} onClick={() => toggleWithNone(setPainBetter, "heat", "none")}>热敷</OptionButton>
@@ -444,7 +466,7 @@ export default function TriageQuestionnaire({
           <SectionTitle>四、功能影响</SectionTitle>
 
           <div>
-            <Q>15. 受伤部位对您日常生活的影响程度：</Q>
+            <Q>16. 受伤部位对您日常生活的影响程度：</Q>
             <div className="flex flex-wrap gap-2">
               <OptionButton selected={dailyImpact === "none"} onClick={() => setDailyImpact("none")}>无影响</OptionButton>
               <OptionButton selected={dailyImpact === "mild"} onClick={() => setDailyImpact("mild")}>轻微影响</OptionButton>
@@ -454,7 +476,7 @@ export default function TriageQuestionnaire({
           </div>
 
           <div>
-            <Q>16. 受伤后是否影响睡眠？</Q>
+            <Q>17. 受伤后是否影响睡眠？</Q>
             <div className="flex flex-wrap gap-2">
               <OptionButton selected={sleepImpact === "none"} onClick={() => setSleepImpact("none")}>不影响</OptionButton>
               <OptionButton selected={sleepImpact === "occasional"} onClick={() => setSleepImpact("occasional")}>偶尔影响</OptionButton>
@@ -467,7 +489,7 @@ export default function TriageQuestionnaire({
           <SectionTitle>五、既往史与风险筛查</SectionTitle>
 
           <div>
-            <Q>17. 您以前是否在同一部位受过伤？</Q>
+            <Q>18. 您以前是否在同一部位受过伤？</Q>
             <div className="flex flex-wrap gap-2">
               <OptionButton selected={previousInjury === "none"} onClick={() => setPreviousInjury("none")}>没有</OptionButton>
               <OptionButton selected={previousInjury === "once"} onClick={() => setPreviousInjury("once")}>有，1次</OptionButton>
@@ -476,7 +498,7 @@ export default function TriageQuestionnaire({
           </div>
 
           <div>
-            <Q>18. 您是否有以下基础疾病？<span className="text-gray-400 font-normal">（可多选）</span></Q>
+            <Q>19. 您是否有以下基础疾病？<span className="text-gray-400 font-normal">（可多选）</span></Q>
             <div className="flex flex-wrap gap-2">
               <OptionButton selected={comorbidities.includes("diabetes")} onClick={() => toggleWithNone(setComorbidities, "diabetes", "none")}>糖尿病</OptionButton>
               <OptionButton selected={comorbidities.includes("osteoporosis")} onClick={() => toggleWithNone(setComorbidities, "osteoporosis", "none")}>骨质疏松</OptionButton>
@@ -489,7 +511,7 @@ export default function TriageQuestionnaire({
           </div>
 
           <div>
-            <Q>19. 您是否长期服用以下药物？<span className="text-gray-400 font-normal">（可多选）</span></Q>
+            <Q>20. 您是否长期服用以下药物？<span className="text-gray-400 font-normal">（可多选）</span></Q>
             <div className="flex flex-wrap gap-2">
               <OptionButton selected={medications.includes("anticoagulant")} onClick={() => toggleWithNone(setMedications, "anticoagulant", "none")}>抗凝药</OptionButton>
               <OptionButton selected={medications.includes("steroid")} onClick={() => toggleWithNone(setMedications, "steroid", "none")}>激素类药物</OptionButton>
@@ -499,7 +521,7 @@ export default function TriageQuestionnaire({
           </div>
 
           <div>
-            <Q>20. 受伤后是否做过以下检查？<span className="text-gray-400 font-normal">（可多选）</span></Q>
+            <Q>21. 受伤后是否做过以下检查？<span className="text-gray-400 font-normal">（可多选）</span></Q>
             <div className="flex flex-wrap gap-2">
               <OptionButton selected={examinations.includes("none")} onClick={() => toggleWithNone(setExaminations, "none", "none")}>未做过检查</OptionButton>
               <OptionButton selected={examinations.includes("xray")} onClick={() => toggleWithNone(setExaminations, "xray", "none")}>X光</OptionButton>
@@ -514,7 +536,7 @@ export default function TriageQuestionnaire({
           <SectionTitle>六、康复目标</SectionTitle>
 
           <div>
-            <Q>21. 您希望通过康复达到什么目标？<span className="text-gray-400 font-normal">（可多选）</span></Q>
+            <Q>22. 您希望通过康复达到什么目标？<span className="text-gray-400 font-normal">（可多选）</span></Q>
             <div className="flex flex-wrap gap-2">
               <OptionButton selected={rehabGoals.includes("pain_free")} onClick={() => toggle(setRehabGoals, "pain_free")}>消除疼痛</OptionButton>
               <OptionButton selected={rehabGoals.includes("return_sport")} onClick={() => toggle(setRehabGoals, "return_sport")}>恢复正常运动</OptionButton>
@@ -525,7 +547,7 @@ export default function TriageQuestionnaire({
           </div>
 
           <div>
-            <Q>22. 您希望多久能恢复？</Q>
+            <Q>23. 您希望多久能恢复？</Q>
             <div className="flex flex-wrap gap-2">
               <OptionButton selected={recoveryExpectation === "asap"} onClick={() => setRecoveryExpectation("asap")}>越快越好</OptionButton>
               <OptionButton selected={recoveryExpectation === "1_2w"} onClick={() => setRecoveryExpectation("1_2w")}>1–2周</OptionButton>

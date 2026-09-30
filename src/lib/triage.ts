@@ -77,6 +77,9 @@ export function triage(data: TriageData): TriageLevel {
 export interface QuestionnaireData {
   // 一、基础信息
   gender: "male" | "female" | "other";
+  /** 身份（多选）：athlete 运动员 / student 学生 / other 其他（带 identitiesOther 文本） */
+  identities: string[];
+  identitiesOther: string; // 可空，identities 含 other 时的自定义文本
   age: "under_18" | "18_30" | "31_45" | "46_60" | "over_60";
   heightCm: string; // 可空
   weightKg: string; // 可空
@@ -193,6 +196,7 @@ export const TRIAGE_META: Record<
 
 export const Q_LABELS = {
   gender: { male: "男", female: "女", other: "其他" } as Record<string, string>,
+  identities: { athlete: "运动员", student: "学生" } as Record<string, string>,
   age: {
     under_18: "18岁以下",
     "18_30": "18–30岁",
@@ -345,7 +349,7 @@ export function buildQuestionnaireSummary(
 
   return [
     `分诊等级：${TRIAGE_META[level].label}`,
-    `【基础信息】性别：${Q_LABELS.gender[q.gender]}；年龄：${Q_LABELS.age[q.age]}；身高：${height}；体重：${weight}；运动频率：${Q_LABELS.exerciseFrequency[q.exerciseFrequency]}；运动类型：${labels(q.sportTypes, Q_LABELS.sportTypes, q.sportOther)}`,
+    `【基础信息】性别：${Q_LABELS.gender[q.gender]}；身份：${labels(q.identities, Q_LABELS.identities, q.identitiesOther, "未填")}；年龄：${Q_LABELS.age[q.age]}；身高：${height}；体重：${weight}；运动频率：${Q_LABELS.exerciseFrequency[q.exerciseFrequency]}；运动类型：${labels(q.sportTypes, Q_LABELS.sportTypes, q.sportOther)}`,
     `【损伤详情】损伤机制：${mechanism}；持续时间：${Q_LABELS.injuryDuration[q.injuryDuration]}；听到弹响：${Q_LABELS.heardPopping[q.heardPopping]}；伤后情况：${labels(q.postInjurySigns, Q_LABELS.postInjurySigns, undefined, "以上都没有")}`,
     `【疼痛评估】静息疼痛：${q.painRest}/10；活动疼痛：${q.painActivity}/10；疼痛性质：${labels(q.painNature, Q_LABELS.painNature, undefined, "未选")}；加重因素：${labels(q.painWorse, Q_LABELS.painWorse, undefined, "未选")}；缓解因素：${labels(q.painBetter, Q_LABELS.painBetter, undefined, "未选")}`,
     `【功能影响】日常生活影响：${Q_LABELS.dailyImpact[q.dailyImpact]}；睡眠影响：${Q_LABELS.sleepImpact[q.sleepImpact]}`,
