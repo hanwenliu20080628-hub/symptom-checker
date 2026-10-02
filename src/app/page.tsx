@@ -10,6 +10,7 @@ import FeedbackSurvey from "@/components/FeedbackSurvey";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import MarkerEditor from "@/components/MarkerEditor";
 import TriageQuestionnaire from "@/components/TriageQuestionnaire";
+import BusuanziCounter from "@/components/BusuanziCounter";
 import { AnalyzeResult, BodyPart } from "@/types";
 import { findBodyPartByMesh } from "@/lib/body-parts";
 import {
@@ -125,8 +126,13 @@ export default function Home() {
       setError(null);
 
       try {
-        // 调用后端分析接口（NEXT_PUBLIC_API_URL 指向 Railway 后端；未配置则用相对路径，适用于本地 Next.js API 路由）
-        const apiBase = process.env.NEXT_PUBLIC_API_URL || "";
+        // 调用后端分析接口：生产构建默认指向 Netlify Functions（任何平台重新构建都不丢失），
+        // 本地 dev 用相对路径走 Next.js API 路由；NEXT_PUBLIC_API_URL 可覆盖二者
+        const apiBase =
+          process.env.NEXT_PUBLIC_API_URL ??
+          (process.env.NODE_ENV === "development"
+            ? ""
+            : "https://symptom-checker-app.netlify.app");
         // 分诊问卷摘要拼在症状描述前，作为 AI 分析上下文（不改变 API 契约）
         const fullSymptoms =
           triageData && triageLevel
@@ -353,8 +359,9 @@ export default function Home() {
       </main>
 
       {/* 底部 */}
-      <footer className="py-4 text-center text-xs text-gray-400 border-t border-gray-100">
-        本工具仅供信息参考，不构成医疗诊断。如有不适，请及时就医。
+      <footer className="py-4 text-center text-xs text-gray-400 border-t border-gray-100 space-y-1">
+        <div>本工具仅供信息参考，不构成医疗诊断。如有不适，请及时就医。</div>
+        <BusuanziCounter />
       </footer>
 
       {/* 分诊问卷弹窗（选部位后、描述症状前） */}
