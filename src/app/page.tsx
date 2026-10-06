@@ -10,7 +10,7 @@ import FeedbackSurvey from "@/components/FeedbackSurvey";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import MarkerEditor from "@/components/MarkerEditor";
 import TriageQuestionnaire from "@/components/TriageQuestionnaire";
-import BusuanziCounter from "@/components/BusuanziCounter";
+import Tracker from "@/components/Tracker";
 import { AnalyzeResult, BodyPart } from "@/types";
 import { findBodyPartByMesh } from "@/lib/body-parts";
 import {
@@ -102,6 +102,23 @@ export default function Home() {
     const level = triage(toTriageData(data));
     setTriageData(data);
     setTriageLevel(level);
+    // 上报分诊问卷选项（仅预设选项，不含自由文本）
+    try {
+      const vid = localStorage.getItem("vid") || "";
+      fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          visitorId: vid,
+          rating: null,
+          bodyPart: null,
+          answers: data,
+        }),
+        keepalive: true,
+      }).catch(() => {});
+    } catch {
+      /* 忽略上报失败 */
+    }
     // 红色警示：存在需尽快线下评估的严重信号，终止康复流程，不进入症状描述
     if (level === "RED") {
       setPhase("blocked");
@@ -202,13 +219,14 @@ export default function Home() {
 
   return (
     <>
+      <Tracker />
       <DisclaimerBar />
 
       <main className="flex-1 flex flex-col items-center px-4 py-6 max-w-5xl mx-auto w-full">
         {/* 标题区 */}
         <div className="text-center mb-4">
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100">
-            人体症状自诊助手
+            PinPoint: A 3D Body Map for Sports Injury Learning
           </h1>
           <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
             点击 3D 人体模型上的部位，描述症状，获取 AI 初步分析参考
@@ -361,7 +379,14 @@ export default function Home() {
       {/* 底部 */}
       <footer className="py-4 text-center text-xs text-gray-400 border-t border-gray-100 space-y-1">
         <div>本工具仅供信息参考，不构成医疗诊断。如有不适，请及时就医。</div>
-        <BusuanziCounter />
+        <div>
+          <a
+            href="/disclaimer"
+            className="underline hover:text-gray-600 dark:hover:text-gray-300"
+          >
+            查看完整免责声明
+          </a>
+        </div>
       </footer>
 
       {/* 分诊问卷弹窗（选部位后、描述症状前） */}

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "人体症状自诊助手",
+  title: "PinPoint: A 3D Body Map for Sports Injury Learning",
   description:
     "点击3D人体模型部位，描述症状，AI为您提供初步分析参考与康复建议",
 };
