@@ -127,6 +127,13 @@ export default function Home() {
     }
   }, []);
 
+  // 问卷跳过：不做分诊，直接进入症状描述（triageData/triageLevel 保持 null，摘要不拼接）
+  const handleTriageSkip = useCallback(() => {
+    setTriageData(null);
+    setTriageLevel(null);
+    setPhase("selecting");
+  }, []);
+
   // 问卷关闭：回到初始状态
   const handleTriageClose = useCallback(() => {
     setPhase("idle");
@@ -396,6 +403,7 @@ export default function Home() {
         isOpen={phase === "triage"}
         onClose={handleTriageClose}
         onComplete={handleTriageComplete}
+        onSkip={handleTriageSkip}
       />
 
       {/* 症状输入弹窗 */}

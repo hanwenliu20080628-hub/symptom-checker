@@ -8,6 +8,7 @@ interface TriageQuestionnaireProps {
   isOpen: boolean;
   onClose: () => void;
   onComplete: (data: QuestionnaireData) => void;
+  onSkip: () => void;
 }
 
 /** 单选/多选选项按钮 */
@@ -88,6 +89,7 @@ export default function TriageQuestionnaire({
   isOpen,
   onClose,
   onComplete,
+  onSkip,
 }: TriageQuestionnaireProps) {
   // 一、基础信息
   const [gender, setGender] = useState<QuestionnaireData["gender"] | null>(null);
@@ -570,6 +572,13 @@ export default function TriageQuestionnaire({
             }`}
           >
             {canSubmit ? "下一步：描述症状" : "请回答所有单选题后继续"}
+          </button>
+          <button
+            type="button"
+            onClick={onSkip}
+            className="w-full mt-2 py-2 text-sm text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            跳过问卷，直接描述症状 →
           </button>
         </div>
       </div>
