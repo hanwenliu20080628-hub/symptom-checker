@@ -96,10 +96,11 @@ app.post("/api/analyze", async (req, res) => {
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "deepseek-chat",
+        model: "deepseek-v4-flash",
         messages: [{ role: "user", content: prompt }],
-        temperature: 0.3,
-        max_tokens: 800,
+        thinking: { type: "enabled" },
+        reasoning_effort: "low",
+        max_tokens: 2000,
       }),
     });
 
