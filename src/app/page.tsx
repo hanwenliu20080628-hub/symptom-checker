@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import dynamic from "next/dynamic";
 import DisclaimerBar from "@/components/DisclaimerBar";
+import ConsentGate from "@/components/ConsentGate";
 import SymptomDialog from "@/components/SymptomDialog";
 import ResultPanel from "@/components/ResultPanel";
 import RedAlertPanel from "@/components/RedAlertPanel";
@@ -11,6 +12,7 @@ import LoadingSpinner from "@/components/LoadingSpinner";
 import MarkerEditor from "@/components/MarkerEditor";
 import TriageQuestionnaire from "@/components/TriageQuestionnaire";
 import Tracker from "@/components/Tracker";
+import { trackSurvey } from "@/lib/analytics";
 import { AnalyzeResult, BodyPart } from "@/types";
 import { findBodyPartByMesh } from "@/lib/body-parts";
 import {
@@ -103,22 +105,7 @@ export default function Home() {
     setTriageData(data);
     setTriageLevel(level);
     // 上报分诊问卷选项（仅预设选项，不含自由文本）
-    try {
-      const vid = localStorage.getItem("vid") || "";
-      fetch("/api/feedback", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          visitorId: vid,
-          rating: null,
-          bodyPart: null,
-          answers: data,
-        }),
-        keepalive: true,
-      }).catch(() => {});
-    } catch {
-      /* 忽略上报失败 */
-    }
+    trackSurvey({ rating: null, bodyPart: null, answers: data as never });
     // 红色警示：存在需尽快线下评估的严重信号，终止康复流程，不进入症状描述
     if (level === "RED") {
       setPhase("blocked");
@@ -226,6 +213,8 @@ export default function Home() {
 
   return (
     <>
+      {/* 参与说明与免责声明：未同意前强制弹窗阻断（已同意则不渲染） */}
+      <ConsentGate />
       <Tracker />
       <DisclaimerBar />
 
@@ -389,6 +378,7 @@ export default function Home() {
         <div>
           <a
             href="/disclaimer"
+            data-disclaimer="1"
             className="underline hover:text-gray-600 dark:hover:text-gray-300"
           >
             查看完整免责声明

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { trackSurvey } from "@/lib/analytics";
 
 type Rating = "good" | "ok" | "bad";
 
@@ -54,6 +55,8 @@ export default function FeedbackSurvey({ bodyPartName }: FeedbackSurveyProps) {
     } catch {
       // localStorage 不可用
     }
+    // 上报评分选项到自托管统计（仅选项，不上传文字评论）
+    trackSurvey({ rating, bodyPart: bodyPartName, answers: {} });
     setSubmitted(true);
   };
 
