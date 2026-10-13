@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
           messages: [{ role: "user", content: prompt }],
           thinking: { type: "enabled" },
           reasoning_effort: "low",
-          max_tokens: 2000,
+          max_tokens: 4000,
         }),
       }
     );
