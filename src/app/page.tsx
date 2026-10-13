@@ -4,6 +4,7 @@ import { useState, useCallback } from "react";
 import dynamic from "next/dynamic";
 import DisclaimerBar from "@/components/DisclaimerBar";
 import ConsentGate from "@/components/ConsentGate";
+import AccessGate from "@/components/AccessGate";
 import SymptomDialog from "@/components/SymptomDialog";
 import ResultPanel from "@/components/ResultPanel";
 import RedAlertPanel from "@/components/RedAlertPanel";
@@ -212,7 +213,7 @@ export default function Home() {
   }, [multiSelect, multiParts, phase]);
 
   return (
-    <>
+    <AccessGate>
       {/* 参与说明与免责声明：未同意前强制弹窗阻断（已同意则不渲染） */}
       <ConsentGate />
       <Tracker />
@@ -409,6 +410,6 @@ export default function Home() {
 
       {/* 标记点编辑面板 */}
       <MarkerEditor isOpen={editorOpen} onClose={() => setEditorOpen(false)} />
-    </>
+    </AccessGate>
   );
 }
