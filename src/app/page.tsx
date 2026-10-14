@@ -12,6 +12,7 @@ import FeedbackSurvey from "@/components/FeedbackSurvey";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import MarkerEditor from "@/components/MarkerEditor";
 import TriageQuestionnaire from "@/components/TriageQuestionnaire";
+import SurveyConsentModal from "@/components/SurveyConsentModal";
 import Tracker from "@/components/Tracker";
 import { trackSurvey } from "@/lib/analytics";
 import { AnalyzeResult, BodyPart } from "@/types";
@@ -57,6 +58,8 @@ export default function Home() {
   // 分诊问卷：23 题问卷数据 + 分诊等级（问卷完成后进入症状描述）
   const [triageData, setTriageData] = useState<QuestionnaireData | null>(null);
   const [triageLevel, setTriageLevel] = useState<TriageLevel | null>(null);
+  // 点击交互点后、进入分诊问卷前的数据分享同意门禁
+  const [showSurveyConsent, setShowSurveyConsent] = useState(false);
 
   const handlePartClick = useCallback((meshName: string, customName?: string) => {
     // 多选模式：切换该部位的选中状态（再点一次取消），不打开症状对话框
@@ -85,10 +88,8 @@ export default function Home() {
     } else {
       return;
     }
-    // 选中部位后先进入分诊问卷，问卷完成后再描述症状
-    setPhase("triage");
-    setResult(null);
-    setError(null);
+    // 选中部位后先弹数据分享同意书，同意后才进入分诊问卷
+    setShowSurveyConsent(true);
   }, [multiSelect]);
 
   const handleCloseDialog = useCallback(() => {
@@ -124,6 +125,22 @@ export default function Home() {
 
   // 问卷关闭：回到初始状态
   const handleTriageClose = useCallback(() => {
+    setPhase("idle");
+    setSelectedPart(null);
+    setTriageData(null);
+    setTriageLevel(null);
+  }, []);
+
+  // 数据分享同意门禁：同意→进入分诊问卷；取消→回初始状态
+  const handleSurveyConsent = useCallback(() => {
+    setShowSurveyConsent(false);
+    setPhase("triage");
+    setResult(null);
+    setError(null);
+  }, []);
+
+  const handleSurveyConsentCancel = useCallback(() => {
+    setShowSurveyConsent(false);
     setPhase("idle");
     setSelectedPart(null);
     setTriageData(null);
@@ -203,9 +220,8 @@ export default function Home() {
         meshNames: [],
         category: "other",
       });
-      setResult(null);
-      setError(null);
-      setPhase("triage");
+      // 先弹数据分享同意书，同意后才进入分诊问卷
+      setShowSurveyConsent(true);
     }
     // 退出多选模式并清空蓝点（按钮文字随 multiSelect 变回「多选」）
     setMultiSelect(false);
@@ -386,6 +402,15 @@ export default function Home() {
           </a>
         </div>
       </footer>
+
+      {/* 数据分享同意门禁（点击交互点后、分诊问卷前） */}
+      {showSurveyConsent && (
+        <SurveyConsentModal
+          bodyPartName={selectedPart?.name || ""}
+          onConfirm={handleSurveyConsent}
+          onCancel={handleSurveyConsentCancel}
+        />
+      )}
 
       {/* 分诊问卷弹窗（选部位后、描述症状前） */}
       <TriageQuestionnaire
