@@ -179,7 +179,7 @@ export const TRIAGE_META: Record<
     label: "黄色警示",
     emoji: "🟡",
     advice:
-      "提示存在需要进一步评估的风险因素或症状负担，建议近期预约门诊评估。如症状持续或加重请及时就医。",
+      "提示存在需要关注的风险因素或症状负担，可进入线上康复流程。如出现症状持续加重、休息后不缓解等情况，建议就医评估。",
     bannerClass: "bg-amber-50 border-amber-200 text-amber-800",
     badgeClass: "bg-amber-100 text-amber-800",
   },

@@ -167,11 +167,25 @@ export default function Home() {
           triageData && triageLevel
             ? `【分诊问卷】\n${buildQuestionnaireSummary(triageData, triageLevel)}\n【症状描述】${symptoms}`
             : symptoms;
-        const response = await fetch(`${apiBase}/api/analyze`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ bodyPart: selectedPart.name, symptoms: fullSymptoms }),
-        });
+        // 60 秒前端超时：DeepSeek 思考模式偶发慢响应时，避免用户无限等待
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 60000);
+        let response: Response;
+        try {
+          response = await fetch(`${apiBase}/api/analyze`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ bodyPart: selectedPart.name, symptoms: fullSymptoms }),
+            signal: controller.signal,
+          });
+        } catch (fetchErr) {
+          if (fetchErr instanceof Error && fetchErr.name === "AbortError") {
+            throw new Error("分析服务响应超时，请稍后重试");
+          }
+          throw fetchErr;
+        } finally {
+          clearTimeout(timeoutId);
+        }
 
         if (!response.ok) {
           const errData = await response.json().catch(() => ({}));
