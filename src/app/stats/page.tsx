@@ -39,15 +39,19 @@ export default function StatsPage() {
       .catch((e) => setErr(String(e)));
   }, []);
 
-  const total = rows.length;
-  const good = rows.filter((r) => r.rating === "good").length;
+  // 分诊问卷与体验反馈共用一张表，仅有效评分参与反馈统计。
+  const feedbackRows = rows.filter(
+    (r) => r.rating === "good" || r.rating === "ok" || r.rating === "bad"
+  );
+  const total = feedbackRows.length;
+  const good = feedbackRows.filter((r) => r.rating === "good").length;
   const goodRate = total ? Math.round((good / total) * 100) : null;
-  const ratingDist = dist(rows, "rating");
-  const partDist = dist(rows, "body_part");
+  const ratingDist = dist(feedbackRows, "rating");
+  const partDist = dist(feedbackRows, "body_part");
 
   const exportCsv = () => {
     const lines = ["rating,body_part,ts"];
-    rows.forEach((r) =>
+    feedbackRows.forEach((r) =>
       lines.push(`"${r.rating || ""}","${r.body_part || ""}","${r.ts}"`)
     );
     const blob = new Blob(["\ufeff" + lines.join("\n")], {
@@ -146,14 +150,14 @@ export default function StatsPage() {
               </tr>
             </thead>
             <tbody>
-              {rows.length === 0 && (
+              {feedbackRows.length === 0 && (
                 <tr>
                   <td colSpan={3} className="px-3 py-2 text-gray-400">
                     暂无数据
                   </td>
                 </tr>
               )}
-              {rows.slice(0, 50).map((r, i) => (
+              {feedbackRows.slice(0, 50).map((r, i) => (
                 <tr key={i} className="border-t border-gray-100">
                   <td className="px-3 py-2">{r.rating || "-"}</td>
                   <td className="px-3 py-2">{r.body_part || "-"}</td>
@@ -174,7 +178,7 @@ export default function StatsPage() {
         </button>
 
         <p className="mt-6 text-xs text-gray-400">
-          口径：PV=每次页面加载（含刷新）；UV=去重浏览器；问卷仅记录选项，不含文字评论。
+          口径：PV=每次页面加载（含刷新）；UV=去重浏览器；反馈统计仅含好用/一般/不好用评分，不含分诊问卷。
         </p>
         {err && <p className="mt-2 text-sm text-red-600">读取失败：{err}</p>}
       </div>
