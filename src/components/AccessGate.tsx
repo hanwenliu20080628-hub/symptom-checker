@@ -30,8 +30,10 @@ export default function AccessGate({ children }: { children: ReactNode }) {
     }
   };
 
-  // 初始检查 / 已通过：渲染子内容
-  if (status === "checking" || status === "granted") {
+  // 检查完成前不挂载统计组件，避免旧同意记录绕过访问码检查。
+  if (status === "checking") return null;
+
+  if (status === "granted") {
     return <>{children}</>;
   }
 

@@ -1,13 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState, useSyncExternalStore } from "react";
 import { trackSurvey } from "@/lib/analytics";
+import { isBaiduAnalyticsPage, trackBaiduRating } from "@/lib/baidu-analytics";
+import { hasConsented } from "@/lib/consent";
 
 type Rating = "good" | "ok" | "bad";
 
 interface FeedbackSurveyProps {
   bodyPartName: string;
+  outcome?: "success" | "failure";
 }
+
+const subscribeToPage = () => () => {};
+const serverPageSnapshot = () => false;
 
 const RATING_OPTIONS = [
   {
@@ -30,13 +36,17 @@ const RATING_OPTIONS = [
   },
 ];
 
-export default function FeedbackSurvey({ bodyPartName }: FeedbackSurveyProps) {
+export default function FeedbackSurvey({ bodyPartName, outcome = "success" }: FeedbackSurveyProps) {
   const [rating, setRating] = useState<Rating | null>(null);
   const [comment, setComment] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [shareWithBaidu, setShareWithBaidu] = useState(false);
+  const submissionLock = useRef(false);
+  const showBaiduSharing = useSyncExternalStore(subscribeToPage, isBaiduAnalyticsPage, serverPageSnapshot);
 
   const handleSubmit = () => {
-    if (!rating) return;
+    if (!rating || submissionLock.current || !hasConsented()) return;
+    submissionLock.current = true;
     try {
       const history = JSON.parse(
         localStorage.getItem("feedback_history") || "[]"
@@ -55,8 +65,19 @@ export default function FeedbackSurvey({ bodyPartName }: FeedbackSurveyProps) {
     } catch {
       // localStorage 不可用
     }
-    // 上报评分选项到自托管统计（仅选项，不上传文字评论）
-    trackSurvey({ rating, bodyPart: bodyPartName, answers: {} });
+    // 两条链路独立；不把健康明细或评论传入百度函数。
+    if (showBaiduSharing && shareWithBaidu) {
+      try {
+        trackBaiduRating(rating, true);
+      } catch {
+        console.warn("百度评分上报失败，不影响反馈提交。");
+      }
+    }
+    try {
+      trackSurvey({ rating, bodyPart: bodyPartName, answers: {} });
+    } catch {
+      console.warn("自建评分上报失败，不影响反馈提交。");
+    }
     setSubmitted(true);
   };
 
@@ -83,7 +104,9 @@ export default function FeedbackSurvey({ bodyPartName }: FeedbackSurveyProps) {
           💬 使用体验反馈
         </h3>
         <p className="text-xs text-gray-500 mt-0.5">
-          本次体验如何？您的反馈将帮助我们改进
+          {outcome === "failure"
+            ? "本次分析未能完成，您仍可以评价本次网站使用体验。"
+            : "本次体验如何？您的反馈将帮助我们改进"}
         </p>
       </div>
 
@@ -129,6 +152,20 @@ export default function FeedbackSurvey({ bodyPartName }: FeedbackSurveyProps) {
             className="mt-2 w-full px-4 py-3 border border-gray-200 rounded-xl resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-gray-900 placeholder-gray-400 text-sm leading-relaxed"
           />
         </div>
+
+        {showBaiduSharing && (
+          <label className="mt-4 flex items-start gap-2 text-sm text-gray-600">
+            <input
+              type="checkbox"
+              checked={shareWithBaidu}
+              onChange={(e) => setShareWithBaidu(e.target.checked)}
+              className="mt-1 h-4 w-4 shrink-0 accent-blue-600"
+            />
+            <span>
+              我同意将本次“好用／一般／不好用”评分发送给百度，用于统计满意度，不附带健康明细或评论。
+            </span>
+          </label>
+        )}
 
         {/* 提交 */}
         <button

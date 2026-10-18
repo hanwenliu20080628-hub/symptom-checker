@@ -14,7 +14,7 @@ Web 症状自诊系统：点击 3D 人体模型部位 → 分诊问卷 → DeepS
   1. `netlify/functions/analyze.mjs` — 生产环境（承载 /api/analyze）
   2. `src/app/api/analyze/route.ts` — 本地 dev
   3. `server/index.js` — 旧 Railway 备份，一般不动
-- 门禁链（顺序）：AccessGate（访问码 `20261234`，前端硬编码软门槛）→ ConsentGate（v1.1 同意弹窗）→ 主界面 → 点击部位 → SurveyConsentModal（数据分享同意门禁）→ TriageQuestionnaire（23 题 6 区；RED 危险信号拦截，不进 AI）→ /api/analyze → DeepSeek → ResultPanel
+- 门禁链（顺序）：AccessGate（访问码 `20261234`，前端硬编码软门槛）→ ConsentGate（当前源码v1.4同意弹窗）→ 主界面 → 点击部位 → SurveyConsentModal（数据分享同意门禁）→ TriageQuestionnaire（23 题 6 区；RED 危险信号拦截，不进 AI）→ /api/analyze → DeepSeek → ResultPanel
 - 关键文件：
   - `src/lib/prompt.ts` — 系统提示词（`{{boundary}}`/`{{bodyPart}}`/`{{symptoms}}` 占位符，替换顺序 boundary→bodyPart→symptoms，boundary 用 crypto 随机串防注入）
   - `src/lib/ai-guard.ts` — 共享校验层（parseTriage / hitRedFlag / enforce / hasBanned / fallbackResult / parseAIResponse）
@@ -38,6 +38,8 @@ Web 症状自诊系统：点击 3D 人体模型部位 → 分诊问卷 → DeepS
 3. 本地 dev：`npm run dev`（localhost:3000，用户固定用这个端口验收）。
 
 ## 部署 SOP（照此执行）
+
+- 用户同步偏好（2026-10-18）：网站修改并本地验证完成后，主动询问“要不要将这次更新同步到 GitHub 和 Netlify？”，提醒千问需单独更新。未获本次授权前不推送/部署；已有本次明确授权时按范围执行，不重复询问。
 1. 构建：`npm run build`（产出 `out/`）。
 2. push GitHub：
    - remote：https://github.com/hanwenliu20080628-hub/symptom-checker.git（credential.helper=store 已配）
@@ -56,6 +58,10 @@ Web 症状自诊系统：点击 3D 人体模型部位 → 分诊问卷 → DeepS
 
 ## 平台镜像
 - 千问等镜像站用 `out/` 手动上传，**不会自动同步**；官网更新后需提醒用户重新上传。API 地址已内置源码（`NEXT_PUBLIC_API_URL ?? 线上默认地址`），任何环境重建不丢。
+- 千问站点 `https://p7muvdem.qwenwork.host/` 的百度访问统计已由用户在千问办公发布V14（2026-10-18）；当前本地v1.4已增加分析失败评分入口、单次可选的百度评分分享、对应声明，待千问办公再次发布。配置在 `src/config/analytics.ts`，公开统计ID为 `2138d9c7fb6fa400bf733ee2e6f4da48`。
+- BaiduTracker 在访问码通过、当前v1.4参与说明同意后启动，仅目标域名首页生效；关闭自动PV后每次文档加载手动记一次PV，刷新可再计，不等待Supabase或AI。Netlify主站、本地、stats/disclaimer页不启用。
+- FeedbackSurvey 在分析成功或失败后显示一次；百度分享默认不勾选，仅本次单独勾选后上报 `["_trackEvent", "使用体验", "提交评分", "good"|"ok"|"bad"]`，不附部位、评论、问卷、症状或错误详情。未勾选仍可提交原自建反馈；重新查询清空评分、评论、分享状态。两路统计异常隔离，同次连击防重，不按访客永久去重。
+- 关键回归：`node scripts/test-baidu-analytics.mjs`（37项）。本次千问发布读取共享目录的新 `out/`，无需部署Netlify或改AI接口；千问办公与Codex共用工作区，由用户在千问办公要求更新原站点。发布前后核对 `output/baidu-qwen-20261018/构建清单.json`；本地隔离验证不代表百度后台已收录。
 
 ## 待办 / 已知问题
 - 【待实施】统计上报在大陆被 SNI 阻断（Supabase 直连 RST、被 `.catch(()=>{})` 静默吞掉，需开 VPN 才记录）：拟加 Netlify Function `/api/track` 代理转发（用现有 anon key，RLS 已放通 anon insert，无需 service_role）；`src/lib/analytics.ts` 的 SB_URL 改为可配置代理地址（与 NEXT_PUBLIC_API_URL 同模式）；netlify.toml 加 redirect（须在 SPA 回退之前）；dev 加 `src/app/api/track/route.ts`。

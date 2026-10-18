@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CONSENT_VERSION, hasConsented, markConsented } from "@/lib/consent";
+import { CONSENT_VERSION, CONSENT_EFFECTIVE_DATE, hasConsented, markConsented } from "@/lib/consent";
+import { BAIDU_PRIVACY_URL } from "@/config/analytics";
 
 /**
- * 强制同意弹窗（参与说明与免责声明 v1.1）
+ * 强制同意弹窗（参与说明与免责声明，版本以 consent.ts 为准）
  * - 首次访问（或声明版本升级后）弹出，必须做出选择才能使用网站
  * - 「同意并进入」：三个勾选项全部勾选后才可点击，记录同意并不再弹出
  * - 「不同意，退出」：显示阻断页面（浏览器不允许脚本关闭非脚本打开的
@@ -44,7 +45,7 @@ const SECTIONS: Section[] = [
       { type: "li", text: "您填写的问卷选项（问卷为可选，不填写也可正常使用）；" },
       { type: "li", text: "使用体验反馈中的评分与部位；" },
       { type: "li", text: "提交时间（仅精确到日）。" },
-      { type: "p", text: "我们不会收集：姓名、手机号、邮箱、账号、IP 地址、地理位置或设备信息。" },
+      { type: "p", text: "自建数据库不主动保存您的姓名、手机号、邮箱、账号、IP 地址、地理位置或设备信息。千问站点另外使用百度统计，其 Cookie、网络及设备信息处理规则见下文与百度隐私政策。" },
       { type: "p", text: "特别说明：您填写的不适描述和提问内容仅用于生成 AI 回复，本网站不会将其保存到服务器（详见第四节）。" },
       { type: "p", text: "请不要在输入内容中填写姓名、联系方式、工作单位等可以识别您身份的信息。" },
       { type: "p", text: "请注意：您的问卷选项可能涉及健康相关信息。勾选同意即表示您同意我们为上述目的处理这些信息。" },
@@ -57,15 +58,18 @@ const SECTIONS: Section[] = [
       { type: "li", text: "AI 处理：您的点选部位、不适描述和问卷选项会发送给 DeepSeek（深度求索公司，国内大模型服务）生成回复。因本网站托管于 Netlify，相关内容在传输时会经过 Netlify 的境外服务器中转。AI 回复生成后，本网站不保存您的原始症状描述。" },
       { type: "li", text: "存储位置：匿名统计与问卷数据存储于 Supabase 云数据库，服务器位于新加坡（境外）。" },
       { type: "li", text: "跨境说明：如上所述，您的信息在 AI 处理与数据存储环节会传输至境外（Netlify 与 Supabase 服务器）。勾选同意即表示您知悉并同意上述跨境传输。" },
-      { type: "li", text: "平台日志：本人不记录您的 IP 地址，但网站托管平台（Netlify）和数据库服务商（Supabase）的服务器可能自动生成访问日志，这不在本人控制范围内。" },
+      { type: "li", text: "百度统计：仅在千问独立托管站点、您同意后加载，用于统计页面访问人次。同一个浏览器再次打开或刷新可以再次计数。百度可能使用 Cookie，并处理 IP、浏览器及设备等信息；本站不主动向百度发送身体部位、症状、问卷答案或文字评论。" },
+      { type: "li", text: "体验评分分享：提交反馈时，您可另行勾选同意将本次“好用、一般、不好用”三种体验评分发送给百度，用于统计满意度，不附带健康明细或评论。该选项默认不勾选，不同意分享也可提交原有反馈、继续使用网站；仅授权本次评分，下次不会自动勾选。" },
+      { type: "li", text: "平台日志：自建数据库不主动保存您的 IP，但网站托管平台（千问或 Netlify）和数据库服务商（Supabase）的服务器可能自动生成访问日志。" },
       { type: "li", text: "保存期限：上述数据将保存至 2027 年 12 月 31 日，到期后全部删除。" },
-      { type: "li", text: "不对外提供：除上述 AI 处理外，不会向任何第三方出售、提供或公开您的信息。" },
+      { type: "li", text: "第三方处理：除上述 AI、存储、托管和百度统计服务所需的信息处理外，不主动对外出售或公开您的信息。百度统计的数据处理与保存规则以其隐私政策及实际服务设置为准，不适用上述自建数据库保存期限。" },
     ],
   },
   {
     title: "五、您的权利",
     blocks: [
       { type: "li", text: "自愿参与：参与完全自愿，您可以随时停止使用，不会产生任何影响。" },
+      { type: "li", text: "撤回同意：可从网站底部的“隐私与同意设置”进入，选择“撤回同意并重新选择”。页面将重新打开，重新同意前不会加载百度统计；此操作不会自动删除已发送至百度的历史数据或 Cookie。" },
       { type: "li", text: "删除数据：本网站不保存您的症状描述、不收集身份信息，无法也不会定位到您的某一次具体提交。如您仍希望删除与您浏览器相关的匿名统计记录，请通过 18828010203 联系本人说明，本人将在 7 天内处理。" },
       { type: "li", text: "疑问咨询：如对本项目有任何疑问，请联系 18828010203。" },
     ],
@@ -87,7 +91,7 @@ const SECTIONS: Section[] = [
 
 /** 三个同意勾选项（默认不勾选，全部勾选后才能进入） */
 const CONSENT_CHECKS = [
-  "我已阅读并理解以上全部内容，知晓本网站内容由 AI 生成、仅供学习参考、不构成医疗建议，并同意本网站按上述说明处理我提供的健康相关信息。",
+  "我已阅读并理解以上全部内容，知晓本网站内容由 AI 生成、仅供学习参考、不构成医疗建议，并同意上述健康相关信息处理及千问站点的百度访问统计与 Cookie 等信息处理。",
   "我同意本网站将我的点选部位、症状描述和问卷选项发送给 DeepSeek（深度求索）生成回复，并同意相关匿名数据存储于新加坡（境外）的 Supabase 数据库（即同意上述跨境传输）。",
   "我确认已年满 18 周岁。",
 ];
@@ -152,7 +156,7 @@ export default function ConsentGate() {
             参与说明与免责声明
           </h3>
           <p className="text-xs text-gray-400 mt-0.5">
-            版本 {CONSENT_VERSION} · 生效日期：2026 年 10 月 13 日
+            版本 {CONSENT_VERSION} · 生效日期：{CONSENT_EFFECTIVE_DATE}
           </p>
           <p className="text-sm text-gray-500 mt-1.5">
             欢迎参与本项目。在使用前，请仔细阅读以下内容。
@@ -189,6 +193,10 @@ export default function ConsentGate() {
             </section>
           ))}
         </div>
+
+        <a href={BAIDU_PRIVACY_URL} target="_blank" rel="noopener noreferrer" className="px-6 pb-2 text-sm text-blue-600 hover:underline">
+          查看百度统计隐私政策
+        </a>
 
         {/* 勾选项 + 按钮（固定底部） */}
         <div className="px-6 py-4 border-t border-gray-100 flex-shrink-0 space-y-3">

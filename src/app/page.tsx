@@ -14,6 +14,7 @@ import MarkerEditor from "@/components/MarkerEditor";
 import TriageQuestionnaire from "@/components/TriageQuestionnaire";
 import SurveyConsentModal from "@/components/SurveyConsentModal";
 import Tracker from "@/components/Tracker";
+import BaiduTracker from "@/components/BaiduTracker";
 import { trackSurvey } from "@/lib/analytics";
 import { AnalyzeResult, BodyPart } from "@/types";
 import { findBodyPartByMesh } from "@/lib/body-parts";
@@ -247,6 +248,7 @@ export default function Home() {
       {/* 参与说明与免责声明：未同意前强制弹窗阻断（已同意则不渲染） */}
       <ConsentGate />
       <Tracker />
+      <BaiduTracker />
       <DisclaimerBar />
 
       <main className="flex-1 flex flex-col items-center px-4 py-6 max-w-5xl mx-auto w-full">
@@ -388,9 +390,15 @@ export default function Home() {
               onNewQuery={handleNewQuery}
               triageLevel={triageLevel}
             />
-            {/* 使用完网站后：用户反馈调查 */}
-            <FeedbackSurvey bodyPartName={selectedPart.name} />
           </>
+        )}
+
+        {/* 成功与失败均可评价网站体验；分析中/返回后卸载并清空本轮反馈。 */}
+        {selectedPart && (phase === "error" || (phase === "result" && result)) && (
+          <FeedbackSurvey
+            bodyPartName={selectedPart.name}
+            outcome={phase === "error" ? "failure" : "success"}
+          />
         )}
 
         {/* 红色警示（分诊为红色：终止康复流程，不进入症状描述） */}
@@ -412,7 +420,7 @@ export default function Home() {
             data-disclaimer="1"
             className="underline hover:text-gray-600 dark:hover:text-gray-300"
           >
-            查看完整免责声明
+            查看完整免责声明 / 隐私与同意设置
           </a>
         </div>
       </footer>
