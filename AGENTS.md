@@ -14,7 +14,7 @@ Web 症状自诊系统：点击 3D 人体模型部位 → 分诊问卷 → DeepS
   1. `netlify/functions/analyze.mjs` — 生产环境（承载 /api/analyze）
   2. `src/app/api/analyze/route.ts` — 本地 dev
   3. `server/index.js` — 旧 Railway 备份，一般不动
-- 门禁链（顺序）：AccessGate（访问码 `20261234`，前端硬编码软门槛）→ ConsentGate（当前源码v1.4同意弹窗）→ 主界面 → 点击部位 → SurveyConsentModal（数据分享同意门禁）→ TriageQuestionnaire（23 题 6 区；RED 危险信号拦截，不进 AI）→ /api/analyze → DeepSeek → ResultPanel
+- 门禁链（顺序）：AccessGate（访问码 `20261234`，前端硬编码软门槛）→ ConsentGate（当前源码v1.5同意弹窗）→ 主界面 → 点击部位 → SurveyConsentModal（数据分享同意门禁）→ TriageQuestionnaire（23 题 6 区；RED 危险信号拦截，不进 AI）→ /api/analyze → DeepSeek → ResultPanel
 - 关键文件：
   - `src/lib/prompt.ts` — 系统提示词（`{{boundary}}`/`{{bodyPart}}`/`{{symptoms}}` 占位符，替换顺序 boundary→bodyPart→symptoms，boundary 用 crypto 随机串防注入）
   - `src/lib/ai-guard.ts` — 共享校验层（parseTriage / hitRedFlag / enforce / hasBanned / fallbackResult / parseAIResponse）
@@ -58,10 +58,11 @@ Web 症状自诊系统：点击 3D 人体模型部位 → 分诊问卷 → DeepS
 
 ## 平台镜像
 - 千问等镜像站用 `out/` 手动上传，**不会自动同步**；官网更新后需提醒用户重新上传。API 地址已内置源码（`NEXT_PUBLIC_API_URL ?? 线上默认地址`），任何环境重建不丢。
-- 千问站点 `https://p7muvdem.qwenwork.host/` 的百度访问统计已由用户在千问办公发布V14（2026-10-18）；当前本地v1.4已增加分析失败评分入口、单次可选的百度评分分享、对应声明，待千问办公再次发布。配置在 `src/config/analytics.ts`，公开统计ID为 `2138d9c7fb6fa400bf733ee2e6f4da48`。
-- BaiduTracker 在访问码通过、当前v1.4参与说明同意后启动，仅目标域名首页生效；关闭自动PV后每次文档加载手动记一次PV，刷新可再计，不等待Supabase或AI。Netlify主站、本地、stats/disclaimer页不启用。
-- FeedbackSurvey 在分析成功或失败后显示一次；百度分享默认不勾选，仅本次单独勾选后上报 `["_trackEvent", "使用体验", "提交评分", "good"|"ok"|"bad"]`，不附部位、评论、问卷、症状或错误详情。未勾选仍可提交原自建反馈；重新查询清空评分、评论、分享状态。两路统计异常隔离，同次连击防重，不按访客永久去重。
-- 关键回归：`node scripts/test-baidu-analytics.mjs`（37项）。本次千问发布读取共享目录的新 `out/`，无需部署Netlify或改AI接口；千问办公与Codex共用工作区，由用户在千问办公要求更新原站点。发布前后核对 `output/baidu-qwen-20261018/构建清单.json`；本地隔离验证不代表百度后台已收录。
+- 千问站点 `https://p7muvdem.qwenwork.host/` 的v1.4评分分享版本曾发布并核对。用户于2026-10-18确认百度仅负责访问量；最新源码v1.5已移除百度评分上报与独立分享勾选。GitHub/Netlify按当次用户授权同步，具体发布结果见当日日志；千问由千问办公单独更新。
+- 百度配置在 `src/config/analytics.ts`，公开站点ID `2138d9c7fb6fa400bf733ee2e6f4da48`。BaiduTracker通过访问码且同意当前v1.5说明后启动，仅目标千问域名首页生效；关闭自动PV后每次完整打开/刷新手动计一次，同文档重渲染不重复，不等待Supabase或AI。Netlify、本地、stats/disclaimer不启用。
+- 百度只记录页面访问；源码已移除trackBaiduRating和_trackEvent，不再向百度发送评分、部位、症状、问卷或评论。不要按历史方案重新接评分事件；免费查看百度事件报表的目标未达成，用户已取消该方案。
+- FeedbackSurvey在成功/失败后保留好用/一般/不好用、自建Supabase提交、本地历史、同次连击防重和重新查询清空状态。文字评论仅本地。大陆直连Supabase可能被阻断的问题尚未解决，本次不能声称无VPN评分已完整收集。
+- 关键回归：`node scripts/test-baidu-analytics.mjs`（32项）。最新out/、ZIP和SHA256清单在 `output/baidu-qwen-20261018/`；千问办公应读取最新版《给千问办公的网站更新提示词.md》，不使用历史备份覆盖。每次本地验证完成询问是否同步，按实际授权发布。
 
 ## 待办 / 已知问题
 - 【待实施】统计上报在大陆被 SNI 阻断（Supabase 直连 RST、被 `.catch(()=>{})` 静默吞掉，需开 VPN 才记录）：拟加 Netlify Function `/api/track` 代理转发（用现有 anon key，RLS 已放通 anon insert，无需 service_role）；`src/lib/analytics.ts` 的 SB_URL 改为可配置代理地址（与 NEXT_PUBLIC_API_URL 同模式）；netlify.toml 加 redirect（须在 SPA 回退之前）；dev 加 `src/app/api/track/route.ts`。

@@ -19,6 +19,7 @@ function setup({ hostname = "p7muvdem.qwenwork.host", pathname = "/", agreed = f
     entries.set("consent_v1.1", "agreed");
     entries.set("consent_v1.2", "agreed");
     entries.set("consent_v1.3", "agreed");
+    entries.set("consent_v1.4", "agreed");
   }
   const scripts = [];
   const warnings = [];
@@ -68,7 +69,6 @@ function setup({ hostname = "p7muvdem.qwenwork.host", pathname = "/", agreed = f
           if (!(index in hookRefs)) hookRefs[index] = { current: initial };
           return hookRefs[index];
         },
-        useSyncExternalStore: (_subscribe, snapshot) => snapshot(),
       };
       if (id === "react/jsx-runtime") return require(id);
       if (id.startsWith("@/")) {
@@ -278,40 +278,13 @@ test("组件卸载后移除撤回监听，不触发多余导航", () => {
   t.window.dispatchEvent(Object.assign(new Event("pageshow"), { persisted: true }));
   assert.deepEqual(t.navigations, []);
 });
-test("未单独同意评分分享不创建百度队列或脚本", () => {
-  const t = setup({ agreed: true });
-  assert.equal(t.analytics.trackBaiduRating("good", false), false);
-  assert.deepEqual(t.commands(), []);
-  assert.equal(t.scripts.length, 0);
-});
-test("三种评分只发送固定四字段事件，不增加额外PV", () => {
-  const t = setup({ agreed: true });
-  t.analytics.trackBaiduPageView();
-  for (const rating of ["good", "ok", "bad"]) assert.equal(t.analytics.trackBaiduRating(rating, true), true);
-  assert.deepEqual(t.commands(), [["_setAutoPageview", false], ["_trackPageview", "/"], ...["good", "ok", "bad"].map((r) => ["_trackEvent", "使用体验", "提交评分", r])]);
-  assert.equal(t.scripts.length, 1);
-});
-test("非法评分与非布尔同意不进入百度", () => {
-  const t = setup({ agreed: true });
-  for (const rating of [null, "GOOD", "unknown", { rating: "good" }]) assert.equal(t.analytics.trackBaiduRating(rating, true), false);
-  assert.equal(t.analytics.trackBaiduRating("good", "true"), false);
-  assert.deepEqual(t.commands(), []);
-});
-test("非目标域名、后台页及撤回后均拒绝评分事件", () => {
-  for (const options of [{ hostname: "localhost" }, { hostname: "symptom-checker-app.netlify.app" }, { pathname: "/stats" }, { pathname: "/disclaimer" }]) {
-    const t = setup({ agreed: true, ...options });
-    assert.equal(t.analytics.trackBaiduRating("good", true), false);
-    assert.deepEqual(t.commands(), []);
-  }
-  const t = setup({ agreed: true });t.consent.revokeConsent();
-  assert.equal(t.analytics.trackBaiduRating("good", true), false);
-});
-test("成功和失败反馈文案正确，分享默认不勾选", () => {
+test("成功和失败评分界面保留，均无百度评分分享选项", () => {
   for (const outcome of ["success", "failure"]) {
     const t = setup({ agreed: true, interactive: true });
     const tree = t.renderFeedback({ outcome });
     assert.ok(textOf(tree).includes(outcome === "failure" ? "本次分析未能完成" : "本次体验如何"));
-    assert.equal(shareCheckbox(tree).props.checked, false);
+    for (const label of ["好用", "一般", "不好用"]) assert.ok(textOf(tree).includes(label));
+    assert.equal(shareCheckbox(tree), undefined);
     assert.equal(submitButton(tree).props.disabled, true);
   }
 });
@@ -322,7 +295,24 @@ test("没选评分即使触发提交也不上报", () => {
   assert.deepEqual(t.commands(), []);
   assert.equal(t.entries.has("feedback_history"), false);
 });
-test("切换选项不发送，未勾分享时只提交原统计", () => {
+test("成功与失败的三种评分均只提交自建统计，百度PV保持不变", () => {
+  for (const outcome of ["success", "failure"]) {
+    for (const [label, rating] of [["好用", "good"], ["一般", "ok"], ["不好用", "bad"]]) {
+      const t = setup({ agreed: true, interactive: true });
+      t.analytics.trackBaiduPageView();
+      const before = t.commands();
+      const tree = chooseRating(t, label, { outcome });
+      assert.equal(shareCheckbox(tree), undefined);
+      submitButton(tree).props.onClick();
+      assert.equal(t.networkCalls(), 1);
+      assert.equal(JSON.parse(t.requests[0].options.body).rating, rating);
+      assert.deepEqual(t.commands(), before);
+      assert.equal(t.scripts.length, 1);
+      assert.ok(textOf(t.renderFeedback({ outcome })).includes("感谢您的反馈"));
+    }
+  }
+});
+test("切换选项不发送请求，提交时使用最终评分", () => {
   const t = setup({ agreed: true, interactive: true });
   chooseRating(t, "好用");const tree = chooseRating(t, "一般");
   assert.equal(t.networkCalls(), 0);
@@ -331,95 +321,74 @@ test("切换选项不发送，未勾分享时只提交原统计", () => {
   assert.equal(JSON.parse(t.requests[0].options.body).rating, "ok");
   assert.equal(JSON.parse(t.entries.get("feedback_history"))[0].rating, "ok");
   assert.deepEqual(t.commands(), []);
+  assert.equal(t.scripts.length, 0);
 });
-test("勾选分享后三种评分在两条链路中值一致", () => {
-  for (const [label, rating] of [["好用", "good"], ["一般", "ok"], ["不好用", "bad"]]) {
-    const t = setup({ agreed: true, interactive: true });
-    const tree = chooseRating(t, label, { outcome: "failure" });
-    shareCheckbox(tree).props.onChange({ target: { checked: true } });
-    submitButton(t.renderFeedback({ outcome: "failure" })).props.onClick();
-    assert.equal(t.networkCalls(), 1);
-    assert.equal(JSON.parse(t.requests[0].options.body).rating, rating);
-    assert.deepEqual(t.commands().at(-1), ["_trackEvent", "使用体验", "提交评分", rating]);
-  }
-});
-test("取消分享后提交不发送百度评分", () => {
+test("同次连击只产生一条本地记录和一次自建上报", () => {
   const t = setup({ agreed: true, interactive: true });
-  let tree = chooseRating(t, "好用");
-  shareCheckbox(tree).props.onChange({ target: { checked: true } });
-  tree = t.renderFeedback();shareCheckbox(tree).props.onChange({ target: { checked: false } });
-  submitButton(t.renderFeedback()).props.onClick();
-  assert.equal(t.networkCalls(), 1);
-  assert.deepEqual(t.commands(), []);
-});
-test("同次连击只产生一条本地记录和两路各一次上报", () => {
-  const t = setup({ agreed: true, interactive: true });
-  const tree = chooseRating(t, "不好用");
-  shareCheckbox(tree).props.onChange({ target: { checked: true } });
-  const submit = submitButton(t.renderFeedback()).props.onClick;
+  const submit = submitButton(chooseRating(t, "不好用")).props.onClick;
   submit();submit();
   assert.equal(t.networkCalls(), 1);
-  assert.equal(t.commands().filter((x) => x[0] === "_trackEvent").length, 1);
+  assert.deepEqual(t.commands(), []);
   assert.equal(JSON.parse(t.entries.get("feedback_history")).length, 1);
   assert.ok(textOf(t.renderFeedback()).includes("感谢您的反馈"));
 });
-test("新流程状态清空，分享不会沿用，仍可再提交", () => {
+test("新流程清空评分与评论，仍可再次评价", () => {
   const t = setup({ agreed: true, interactive: true });
-  let tree = chooseRating(t, "好用");shareCheckbox(tree).props.onChange({ target: { checked: true } });
+  const first = chooseRating(t, "好用");
+  findElement(first, (n) => n.type === "textarea").props.onChange({ target: { value: "仅用于隔离验证" } });
   submitButton(t.renderFeedback()).props.onClick();
-  t.resetFeedback();tree = t.renderFeedback({ outcome: "failure" });
-  assert.equal(shareCheckbox(tree).props.checked, false);
+  t.resetFeedback();const tree = t.renderFeedback({ outcome: "failure" });
   assert.equal(submitButton(tree).props.disabled, true);
   assert.equal(findElement(tree, (n) => n.type === "textarea").props.value, "");
   submitButton(chooseRating(t, "一般")).props.onClick();
   assert.equal(t.networkCalls(), 2);
-  assert.equal(t.commands().filter((x) => x[0] === "_trackEvent").length, 1);
+  assert.deepEqual(t.commands(), []);
 });
-test("评论仅存本地，不随百度或Supabase评分发送", () => {
+test("评论仅存浏览器本地，不随自建评分发送，百度队列不变", () => {
   const t = setup({ agreed: true, interactive: true });
-  let tree = chooseRating(t, "好用");
+  t.analytics.trackBaiduPageView();const before = t.commands();
+  const tree = chooseRating(t, "好用");
   findElement(tree, (n) => n.type === "textarea").props.onChange({ target: { value: "仅用于隔离验证的评论" } });
-  tree = t.renderFeedback();shareCheckbox(tree).props.onChange({ target: { checked: true } });
   submitButton(t.renderFeedback()).props.onClick();
   assert.equal(JSON.parse(t.entries.get("feedback_history"))[0].comment, "仅用于隔离验证的评论");
-  assert.ok(!JSON.stringify(t.commands()).includes("评论"));
   assert.ok(!t.requests[0].options.body.includes("仅用于隔离验证"));
-  assert.ok(!JSON.stringify(t.commands()).includes("隔离测试部位"));
+  assert.deepEqual(t.commands(), before);
 });
-test("Supabase同步异常不影响百度与感谢界面", () => {
+test("自建统计异常不影响反馈感谢界面及已初始化的百度PV", () => {
   const t = setup({ agreed: true, interactive: true });
+  t.analytics.trackBaiduPageView();const before = t.commands();
   t.load("src/lib/analytics.ts").trackSurvey = () => { throw Error("blocked"); };
-  const tree = chooseRating(t, "好用");shareCheckbox(tree).props.onChange({ target: { checked: true } });
-  assert.doesNotThrow(() => submitButton(t.renderFeedback()).props.onClick());
-  assert.equal(t.commands().filter((x) => x[0] === "_trackEvent").length, 1);
+  assert.doesNotThrow(() => submitButton(chooseRating(t, "好用")).props.onClick());
+  assert.deepEqual(t.commands(), before);
   assert.ok(textOf(t.renderFeedback()).includes("感谢您的反馈"));
 });
-test("百度同步异常不影响原统计与感谢界面", () => {
+test("百度脚本被拦截不影响自建评分提交", () => {
   const t = setup({ agreed: true, interactive: true });
-  t.analytics.trackBaiduRating = () => { throw Error("blocked"); };
-  const tree = chooseRating(t, "好用");shareCheckbox(tree).props.onChange({ target: { checked: true } });
-  assert.doesNotThrow(() => submitButton(t.renderFeedback()).props.onClick());
+  t.analytics.trackBaiduPageView();t.scripts[0].onerror();
+  assert.doesNotThrow(() => submitButton(chooseRating(t, "不好用")).props.onClick());
   assert.equal(t.networkCalls(), 1);
-  assert.ok(textOf(t.renderFeedback()).includes("感谢您的反馈"));
+  assert.equal(JSON.parse(t.requests[0].options.body).rating, "bad");
 });
-test("本地存储不可用时仍可提交，分享仍需本次勾选", () => {
+test("浏览器存储不可用仍可提交评分，不启动额外百度请求", () => {
   const t = setup({ storageFails: true, interactive: true });t.consent.markConsented();
-  const tree = chooseRating(t, "好用");shareCheckbox(tree).props.onChange({ target: { checked: true } });
-  assert.doesNotThrow(() => submitButton(t.renderFeedback()).props.onClick());
+  assert.doesNotThrow(() => submitButton(chooseRating(t, "好用")).props.onClick());
   assert.equal(t.networkCalls(), 1);
-  assert.equal(t.commands().filter((x) => x[0] === "_trackEvent").length, 1);
+  assert.deepEqual(t.commands(), []);
+  assert.equal(t.scripts.length, 0);
 });
-test("提交前撤回总同意，不再发送任何评分", () => {
+test("提交前撤回总同意，不再发送评分", () => {
   const t = setup({ agreed: true, interactive: true });
-  const tree = chooseRating(t, "好用");shareCheckbox(tree).props.onChange({ target: { checked: true } });
-  const submit = submitButton(t.renderFeedback()).props.onClick;
+  const submit = submitButton(chooseRating(t, "好用")).props.onClick;
   t.consent.revokeConsent();submit();
   assert.equal(t.networkCalls(), 0);assert.deepEqual(t.commands(), []);
 });
-test("非千问页面隐藏分享选项，原反馈仍可提交", () => {
-  const t = setup({ hostname: "symptom-checker-app.netlify.app", agreed: true, interactive: true });
-  const tree = chooseRating(t, "好用");assert.equal(shareCheckbox(tree), undefined);
-  submitButton(tree).props.onClick();assert.equal(t.networkCalls(), 1);assert.deepEqual(t.commands(), []);
+test("Netlify与本地保留自建评分，不产生百度请求或分享勾选", () => {
+  for (const hostname of ["symptom-checker-app.netlify.app", "localhost"]) {
+    const t = setup({ hostname, agreed: true, interactive: true });
+    const tree = chooseRating(t, "好用");assert.equal(shareCheckbox(tree), undefined);
+    submitButton(tree).props.onClick();
+    assert.equal(t.networkCalls(), 1);assert.deepEqual(t.commands(), []);assert.equal(t.scripts.length, 0);
+  }
 });
 
 console.log(`\n结果：${results.length} 通过，0 失败`);

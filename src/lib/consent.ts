@@ -7,7 +7,7 @@
  *   属浏览器侧状态；声明全文与版本以源码为准，跨设备一致）
  */
 
-export const CONSENT_VERSION = "v1.4";
+export const CONSENT_VERSION = "v1.5";
 export const CONSENT_EFFECTIVE_DATE = "2026 年 10 月 18 日";
 export const CONSENT_KEY = `consent_${CONSENT_VERSION}`;
 let sessionConsented: boolean | null = null;

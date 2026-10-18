@@ -1,8 +1,7 @@
 "use client";
 
-import { useRef, useState, useSyncExternalStore } from "react";
+import { useRef, useState } from "react";
 import { trackSurvey } from "@/lib/analytics";
-import { isBaiduAnalyticsPage, trackBaiduRating } from "@/lib/baidu-analytics";
 import { hasConsented } from "@/lib/consent";
 
 type Rating = "good" | "ok" | "bad";
@@ -11,9 +10,6 @@ interface FeedbackSurveyProps {
   bodyPartName: string;
   outcome?: "success" | "failure";
 }
-
-const subscribeToPage = () => () => {};
-const serverPageSnapshot = () => false;
 
 const RATING_OPTIONS = [
   {
@@ -40,9 +36,7 @@ export default function FeedbackSurvey({ bodyPartName, outcome = "success" }: Fe
   const [rating, setRating] = useState<Rating | null>(null);
   const [comment, setComment] = useState("");
   const [submitted, setSubmitted] = useState(false);
-  const [shareWithBaidu, setShareWithBaidu] = useState(false);
   const submissionLock = useRef(false);
-  const showBaiduSharing = useSyncExternalStore(subscribeToPage, isBaiduAnalyticsPage, serverPageSnapshot);
 
   const handleSubmit = () => {
     if (!rating || submissionLock.current || !hasConsented()) return;
@@ -65,14 +59,7 @@ export default function FeedbackSurvey({ bodyPartName, outcome = "success" }: Fe
     } catch {
       // localStorage 不可用
     }
-    // 两条链路独立；不把健康明细或评论传入百度函数。
-    if (showBaiduSharing && shareWithBaidu) {
-      try {
-        trackBaiduRating(rating, true);
-      } catch {
-        console.warn("百度评分上报失败，不影响反馈提交。");
-      }
-    }
+    // 体验评分仅尝试提交原自建统计，不发送给百度。
     try {
       trackSurvey({ rating, bodyPart: bodyPartName, answers: {} });
     } catch {
@@ -152,20 +139,6 @@ export default function FeedbackSurvey({ bodyPartName, outcome = "success" }: Fe
             className="mt-2 w-full px-4 py-3 border border-gray-200 rounded-xl resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-gray-900 placeholder-gray-400 text-sm leading-relaxed"
           />
         </div>
-
-        {showBaiduSharing && (
-          <label className="mt-4 flex items-start gap-2 text-sm text-gray-600">
-            <input
-              type="checkbox"
-              checked={shareWithBaidu}
-              onChange={(e) => setShareWithBaidu(e.target.checked)}
-              className="mt-1 h-4 w-4 shrink-0 accent-blue-600"
-            />
-            <span>
-              我同意将本次“好用／一般／不好用”评分发送给百度，用于统计满意度，不附带健康明细或评论。
-            </span>
-          </label>
-        )}
 
         {/* 提交 */}
         <button
