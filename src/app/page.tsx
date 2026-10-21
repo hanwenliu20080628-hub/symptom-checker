@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import dynamic from "next/dynamic";
 import DisclaimerBar from "@/components/DisclaimerBar";
 import ConsentGate from "@/components/ConsentGate";
@@ -16,6 +16,8 @@ import SurveyConsentModal from "@/components/SurveyConsentModal";
 import Tracker from "@/components/Tracker";
 import BaiduTracker from "@/components/BaiduTracker";
 import { trackSurvey } from "@/lib/analytics";
+import { createAssessmentId } from "@/lib/feedback";
+import { isAnalyzeResult } from "@/lib/analyze-result";
 import { AnalyzeResult, BodyPart } from "@/types";
 import { findBodyPartByMesh } from "@/lib/body-parts";
 import {
@@ -61,6 +63,8 @@ export default function Home() {
   const [triageLevel, setTriageLevel] = useState<TriageLevel | null>(null);
   // 点击交互点后、进入分诊问卷前的数据分享同意门禁
   const [showSurveyConsent, setShowSurveyConsent] = useState(false);
+  const [assessmentId, setAssessmentId] = useState("");
+  const analyzeRequestId = useRef(0);
 
   const handlePartClick = useCallback((meshName: string, customName?: string) => {
     // 多选模式：切换该部位的选中状态（再点一次取消），不打开症状对话框
@@ -89,6 +93,9 @@ export default function Home() {
     } else {
       return;
     }
+    // 新部位使旧请求失效，避免旧结果打开新一轮的评价。
+    analyzeRequestId.current++;
+    setAssessmentId("");
     // 选中部位后先弹数据分享同意书，同意后才进入分诊问卷
     setShowSurveyConsent(true);
   }, [multiSelect]);
@@ -134,6 +141,9 @@ export default function Home() {
 
   // 数据分享同意门禁：同意→进入分诊问卷；取消→回初始状态
   const handleSurveyConsent = useCallback(() => {
+    setAssessmentId(createAssessmentId());
+    setTriageData(null);
+    setTriageLevel(null);
     setShowSurveyConsent(false);
     setPhase("triage");
     setResult(null);
@@ -151,6 +161,7 @@ export default function Home() {
   const handleSubmit = useCallback(
     async (symptoms: string) => {
       if (!selectedPart) return;
+      const requestId = ++analyzeRequestId.current;
 
       setPhase("analyzing");
       setError(null);
@@ -188,15 +199,19 @@ export default function Home() {
           clearTimeout(timeoutId);
         }
 
+        if (requestId !== analyzeRequestId.current) return;
         if (!response.ok) {
           const errData = await response.json().catch(() => ({}));
           throw new Error(errData.error || `分析失败（${response.status}）`);
         }
 
         const data = await response.json();
+        if (requestId !== analyzeRequestId.current) return;
+        if (!isAnalyzeResult(data)) throw new Error("分析结果格式异常，请稍后重试");
         setResult(data);
         setPhase("result");
       } catch (err) {
+        if (requestId !== analyzeRequestId.current) return;
         setError(err instanceof Error ? err.message : "未知错误");
         setPhase("error");
       }
@@ -205,6 +220,8 @@ export default function Home() {
   );
 
   const handleNewQuery = useCallback(() => {
+    analyzeRequestId.current++;
+    setAssessmentId("");
     setPhase("idle");
     setSelectedPart(null);
     setResult(null);
@@ -229,6 +246,8 @@ export default function Home() {
     }
     // 点击「完成」：把已选部位合并为一个查询对象，跳转到分诊问卷（之后才是症状描述）
     if (multiParts.length > 0) {
+      analyzeRequestId.current++;
+      setAssessmentId("");
       setSelectedPart({
         id: multiParts.map((p) => p.id).join(","),
         name: multiParts.map((p) => p.name).join("、"),
@@ -393,11 +412,14 @@ export default function Home() {
           </>
         )}
 
-        {/* 成功与失败均可评价网站体验；分析中/返回后卸载并清空本轮反馈。 */}
-        {selectedPart && (phase === "error" || (phase === "result" && result)) && (
+        {/* 同一评估共用一份评价状态，成功/失败才展示；新评估编号重置。 */}
+        {selectedPart && assessmentId && (
           <FeedbackSurvey
+            key={assessmentId}
+            assessmentId={assessmentId}
             bodyPartName={selectedPart.name}
-            outcome={phase === "error" ? "failure" : "success"}
+            questionnaireUsed={triageData !== null}
+            outcome={phase === "error" ? "failure" : phase === "result" && result ? "success" : null}
           />
         )}
 

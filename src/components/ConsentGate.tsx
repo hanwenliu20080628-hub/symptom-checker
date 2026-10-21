@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { CONSENT_VERSION, CONSENT_EFFECTIVE_DATE, hasConsented, markConsented } from "@/lib/consent";
 import { BAIDU_PRIVACY_URL } from "@/config/analytics";
+import { FEEDBACK_PRIVACY_NOTICE } from "@/lib/feedback";
 
 /**
  * 强制同意弹窗（参与说明与免责声明，版本以 consent.ts 为准）
@@ -43,7 +44,7 @@ const SECTIONS: Section[] = [
       { type: "p", text: "为完成学习实验，本网站会收集并保存以下匿名信息：" },
       { type: "li", text: "您在 3D 人体模型上点选的部位名称；" },
       { type: "li", text: "您填写的问卷选项（问卷为可选，不填写也可正常使用）；" },
-      { type: "li", text: "使用体验反馈中的评分与部位；" },
+      { type: "li", text: "表达帮助评价中的两题评分、是否填写问卷、本轮评估编号、AI分析成功或失败状态与部位；" },
       { type: "li", text: "提交时间（仅精确到日）。" },
       { type: "p", text: "自建数据库不主动保存您的姓名、手机号、邮箱、账号、IP 地址、地理位置或设备信息。千问站点另外使用百度统计，其 Cookie、网络及设备信息处理规则见下文与百度隐私政策。" },
       { type: "p", text: "特别说明：您填写的不适描述和提问内容仅用于生成 AI 回复，本网站不会将其保存到服务器（详见第四节）。" },
@@ -59,7 +60,7 @@ const SECTIONS: Section[] = [
       { type: "li", text: "存储位置：匿名统计与问卷数据存储于 Supabase 云数据库，服务器位于新加坡（境外）。" },
       { type: "li", text: "跨境说明：如上所述，您的信息在 AI 处理与数据存储环节会传输至境外（Netlify 与 Supabase 服务器）。勾选同意即表示您知悉并同意上述跨境传输。" },
       { type: "li", text: "百度统计：仅在千问独立托管站点、您同意后加载，用于统计页面访问人次。同一个浏览器再次打开或刷新可以再次计数。百度可能使用 Cookie，并处理 IP、浏览器及设备等信息；本站不主动向百度发送体验评分、身体部位、症状、问卷答案或文字评论。" },
-      { type: "li", text: "体验评分：百度统计仅用于页面访问统计，不接收“好用、一般、不好用”体验评分。评分与部位仅用于原自建统计；文字评论仅保存在您的浏览器本地，不发送给百度或自建统计数据库。" },
+      { type: "li", text: FEEDBACK_PRIVACY_NOTICE },
       { type: "li", text: "平台日志：自建数据库不主动保存您的 IP，但网站托管平台（千问或 Netlify）和数据库服务商（Supabase）的服务器可能自动生成访问日志。" },
       { type: "li", text: "保存期限：上述数据将保存至 2027 年 12 月 31 日，到期后全部删除。" },
       { type: "li", text: "第三方处理：除上述 AI、存储、托管和百度统计服务所需的信息处理外，不主动对外出售或公开您的信息。百度统计的数据处理与保存规则以其隐私政策及实际服务设置为准，不适用上述自建数据库保存期限。" },

@@ -72,7 +72,7 @@ export async function sbCount(table: string, col = "id"): Promise<number> {
   const res = await fetch(`${SB_URL}/rest/v1/${table}?select=${col}&limit=1`, {
     headers: sbHeaders("count=exact"),
   });
-  if (!res.ok) return 0;
+  if (!res.ok) throw new Error(`统计读取失败（HTTP ${res.status}）`);
   const range = res.headers.get("content-range") || "0-0/0";
   const total = parseInt(range.split("/")[1] || "0", 10);
   return Number.isFinite(total) ? total : 0;
@@ -88,6 +88,6 @@ export async function sbSelect<T = Record<string, unknown>>(
     `${SB_URL}/rest/v1/${table}?select=${cols}&limit=${limit}&order=ts.desc`,
     { headers: sbHeaders() }
   );
-  if (!res.ok) return [];
+  if (!res.ok) throw new Error(`评价读取失败（HTTP ${res.status}）`);
   return (await res.json()) as T[];
 }

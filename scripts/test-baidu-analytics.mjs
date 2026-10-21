@@ -20,6 +20,7 @@ function setup({ hostname = "p7muvdem.qwenwork.host", pathname = "/", agreed = f
     entries.set("consent_v1.2", "agreed");
     entries.set("consent_v1.3", "agreed");
     entries.set("consent_v1.4", "agreed");
+    entries.set("consent_v1.5", "agreed");
   }
   const scripts = [];
   const warnings = [];
@@ -58,6 +59,7 @@ function setup({ hostname = "p7muvdem.qwenwork.host", pathname = "/", agreed = f
     const localRequire = (id) => {
       if (id === "react") return {
         useEffect: (fn) => effects.push(fn),
+        useCallback: (fn) => fn,
         useState: (initial) => {
           if (!interactive) return [states.length ? states.shift() : initial, () => {}];
           const index = stateCursor++;
@@ -85,7 +87,7 @@ function setup({ hostname = "p7muvdem.qwenwork.host", pathname = "/", agreed = f
   const renderFeedback = (props = {}) => {
     stateCursor = 0;
     refCursor = 0;
-    return load("src/components/FeedbackSurvey.tsx").default({ bodyPartName: "隔离测试部位", ...props });
+    return load("src/components/FeedbackSurvey.tsx").default({ bodyPartName: "隔离测试部位", assessmentId: "test-assessment", questionnaireUsed: true, outcome: "success", ...props });
   };
   return { consent, analytics, window, scripts, warnings, entries, effects, navigations, requests, load, renderFeedback, resetFeedback: () => { hookStates.length = 0; hookRefs.length = 0; }, networkCalls: () => networkCalls, commands: () => JSON.parse(JSON.stringify(window._hmt ?? [])) };
 }
@@ -93,6 +95,7 @@ function setup({ hostname = "p7muvdem.qwenwork.host", pathname = "/", agreed = f
 function findElement(tree, predicate) {
   if (!tree || typeof tree !== "object") return undefined;
   if (predicate(tree)) return tree;
+  if (typeof tree.type === "function" && tree.type.name === "FeedbackForm") return findElement(tree.type(tree.props), predicate);
   for (const child of [tree.props?.children].flat(Infinity)) {
     const found = findElement(child, predicate);
     if (found) return found;
@@ -102,15 +105,22 @@ function textOf(tree) {
   if (tree == null || typeof tree === "boolean") return "";
   if (typeof tree !== "object") return String(tree);
   if (Array.isArray(tree)) return tree.map(textOf).join("");
+  if (typeof tree.type === "function" && tree.type.name === "FeedbackForm") return textOf(tree.type(tree.props));
   return textOf(tree.props?.children);
 }
-const submitButton = (tree) => findElement(tree, (n) => n.type === "button" && textOf(n) === "提交反馈");
+const submitButton = (tree) => {
+  const button = findElement(tree, (n) => n.type === "button" && textOf(n) === "提交评价");
+  const form = findElement(tree, (n) => n.type === "form");
+  return { ...button, props: { ...button.props, onClick: () => form.props.onSubmit({ preventDefault() {} }) } };
+};
 const shareCheckbox = (tree) => findElement(tree, (n) => n.type === "input" && n.props.type === "checkbox");
-function chooseRating(t, label, props = {}) {
-  const tree = t.renderFeedback(props);
-  const button = findElement(tree, (n) => n.type === "button" && Array.isArray(n.props.children) && textOf(n.props.children[1]) === label);
-  assert.ok(button);
-  button.props.onClick();
+function chooseRating(t, model = "very_helpful", questionnaire = "somewhat_helpful", props = {}) {
+  let tree = t.renderFeedback(props);
+  findElement(tree, (n) => n.type === "input" && n.props.name === "inline-model" && n.props.value === model).props.onChange();
+  tree = t.renderFeedback(props);
+  if (props.questionnaireUsed !== false && questionnaire !== null) {
+    findElement(tree, (n) => n.type === "input" && n.props.name === "inline-questionnaire" && n.props.value === questionnaire).props.onChange();
+  }
   return t.renderFeedback(props);
 }
 
@@ -278,117 +288,156 @@ test("组件卸载后移除撤回监听，不触发多余导航", () => {
   t.window.dispatchEvent(Object.assign(new Event("pageshow"), { persisted: true }));
   assert.deepEqual(t.navigations, []);
 });
-test("成功和失败评分界面保留，均无百度评分分享选项", () => {
+test("成功失败均显示两题，且无百度评分选项", () => {
   for (const outcome of ["success", "failure"]) {
     const t = setup({ agreed: true, interactive: true });
     const tree = t.renderFeedback({ outcome });
-    assert.ok(textOf(tree).includes(outcome === "failure" ? "本次分析未能完成" : "本次体验如何"));
-    for (const label of ["好用", "一般", "不好用"]) assert.ok(textOf(tree).includes(label));
+    for (const label of ["表达帮助评价", "位置与范围", "全面地描述", "很有帮助", "有一些帮助", "没有帮助"]) assert.ok(textOf(tree).includes(label));
     assert.equal(shareCheckbox(tree), undefined);
     assert.equal(submitButton(tree).props.disabled, true);
+    assert.ok(findElement(tree, (n) => typeof n.type === "function" && n.type.name === "FeedbackDialog"));
   }
 });
-test("没选评分即使触发提交也不上报", () => {
+test("分析尚未结束不显示评价，结局到达后显示", () => {
+  const t = setup({ agreed: true, interactive: true });
+  assert.equal(t.renderFeedback({ outcome: null }), null);
+  assert.ok(submitButton(t.renderFeedback({ outcome: "failure" })));
+});
+test("未完成适用题目，直接调用提交也不上报", () => {
   const t = setup({ agreed: true, interactive: true });
   submitButton(t.renderFeedback()).props.onClick();
+  submitButton(chooseRating(t, "very_helpful", null)).props.onClick();
   assert.equal(t.networkCalls(), 0);
-  assert.deepEqual(t.commands(), []);
   assert.equal(t.entries.has("feedback_history"), false);
 });
-test("成功与失败的三种评分均只提交自建统计，百度PV保持不变", () => {
-  for (const outcome of ["success", "failure"]) {
-    for (const [label, rating] of [["好用", "good"], ["一般", "ok"], ["不好用", "bad"]]) {
-      const t = setup({ agreed: true, interactive: true });
-      t.analytics.trackBaiduPageView();
-      const before = t.commands();
-      const tree = chooseRating(t, label, { outcome });
-      assert.equal(shareCheckbox(tree), undefined);
-      submitButton(tree).props.onClick();
-      assert.equal(t.networkCalls(), 1);
-      assert.equal(JSON.parse(t.requests[0].options.body).rating, rating);
-      assert.deepEqual(t.commands(), before);
-      assert.equal(t.scripts.length, 1);
-      assert.ok(textOf(t.renderFeedback({ outcome })).includes("感谢您的反馈"));
-    }
+test("两题分别保存，成功失败的九种组合只发送自建统计", () => {
+  for (const outcome of ["success", "failure"]) for (const model of ["very_helpful", "somewhat_helpful", "not_helpful"]) for (const q of ["very_helpful", "somewhat_helpful", "not_helpful"]) {
+    const t = setup({ agreed: true, interactive: true });
+    t.analytics.trackBaiduPageView(); const before = t.commands();
+    submitButton(chooseRating(t, model, q, { outcome })).props.onClick();
+    assert.equal(t.networkCalls(), 1);
+    const payload = JSON.parse(t.requests[0].options.body);
+    assert.equal(payload.rating, null);
+    assert.equal(payload.answers.modelHelp, model);
+    assert.equal(payload.answers.questionnaireHelp, q);
+    assert.equal(payload.answers.aiOutcome, outcome);
+    assert.equal(payload.answers.assessmentId, "test-assessment");
+    assert.equal(payload.answers.feedbackVersion, "expression_help_v1");
+    assert.deepEqual(t.commands(), before);
+    assert.ok(textOf(t.renderFeedback()).includes("感谢你的评价"));
   }
 });
-test("切换选项不发送请求，提交时使用最终评分", () => {
+test("跳过问卷时第二题不适用，只评价模型即可提交", () => {
   const t = setup({ agreed: true, interactive: true });
-  chooseRating(t, "好用");const tree = chooseRating(t, "一般");
-  assert.equal(t.networkCalls(), 0);
+  const props = { questionnaireUsed: false };
+  const tree = chooseRating(t, "not_helpful", null, props);
+  assert.ok(textOf(tree).includes("本次未填写问卷"));
+  assert.equal(findElement(tree, (n) => n.type === "input" && n.props.name === "inline-questionnaire"), undefined);
+  assert.equal(submitButton(tree).props.disabled, false);
   submitButton(tree).props.onClick();
-  assert.equal(t.networkCalls(), 1);
-  assert.equal(JSON.parse(t.requests[0].options.body).rating, "ok");
-  assert.equal(JSON.parse(t.entries.get("feedback_history"))[0].rating, "ok");
-  assert.deepEqual(t.commands(), []);
-  assert.equal(t.scripts.length, 0);
+  const a = JSON.parse(t.requests[0].options.body).answers;
+  assert.equal(a.questionnaireUsed, false); assert.equal(a.questionnaireHelp, null);
 });
-test("同次连击只产生一条本地记录和一次自建上报", () => {
+test("暂不评价不提交，答案保留且不重复弹出", () => {
   const t = setup({ agreed: true, interactive: true });
-  const submit = submitButton(chooseRating(t, "不好用")).props.onClick;
-  submit();submit();
+  const tree = chooseRating(t, "somewhat_helpful", "not_helpful");
+  findElement(tree, (n) => n.type === "button" && textOf(n) === "暂不评价").props.onClick();
+  const after = t.renderFeedback();
+  assert.equal(t.networkCalls(), 0);
+  assert.equal(findElement(after, (n) => typeof n.type === "function" && n.type.name === "FeedbackDialog"), undefined);
+  assert.equal(findElement(after, (n) => n.type === "input" && n.props.name === "inline-model" && n.props.value === "somewhat_helpful").props.checked, true);
+  assert.equal(findElement(after, (n) => n.type === "input" && n.props.name === "inline-questionnaire" && n.props.value === "not_helpful").props.checked, true);
+  assert.equal(findElement(t.renderFeedback({ outcome: "failure" }), (n) => typeof n.type === "function" && n.type.name === "FeedbackDialog"), undefined);
+});
+test("同次双击和跨入口重复提交只有一条记录", () => {
+  const t = setup({ agreed: true, interactive: true });
+  const submit = submitButton(chooseRating(t)).props.onClick;
+  submit(); submit();
   assert.equal(t.networkCalls(), 1);
-  assert.deepEqual(t.commands(), []);
   assert.equal(JSON.parse(t.entries.get("feedback_history")).length, 1);
-  assert.ok(textOf(t.renderFeedback()).includes("感谢您的反馈"));
 });
-test("新流程清空评分与评论，仍可再次评价", () => {
+test("新流程重置答案、评论和弹窗状态", () => {
   const t = setup({ agreed: true, interactive: true });
-  const first = chooseRating(t, "好用");
-  findElement(first, (n) => n.type === "textarea").props.onChange({ target: { value: "仅用于隔离验证" } });
+  const tree = chooseRating(t);
+  findElement(tree, (n) => n.type === "textarea").props.onChange({ target: { value: "测试评论" } });
   submitButton(t.renderFeedback()).props.onClick();
-  t.resetFeedback();const tree = t.renderFeedback({ outcome: "failure" });
-  assert.equal(submitButton(tree).props.disabled, true);
-  assert.equal(findElement(tree, (n) => n.type === "textarea").props.value, "");
-  submitButton(chooseRating(t, "一般")).props.onClick();
-  assert.equal(t.networkCalls(), 2);
+  t.resetFeedback(); const next = t.renderFeedback({ assessmentId: "new-assessment" });
+  assert.equal(submitButton(next).props.disabled, true);
+  assert.equal(findElement(next, (n) => n.type === "textarea").props.value, "");
+  assert.ok(findElement(next, (n) => typeof n.type === "function" && n.type.name === "FeedbackDialog"));
+});
+test("评论仅本地保存，网络载荷不含评论，历史单项记录保留", () => {
+  const t = setup({ agreed: true, interactive: true });
+  t.entries.set("feedback_history", JSON.stringify([{ rating: "good", comment: "旧评论" }]));
+  findElement(chooseRating(t), (n) => n.type === "textarea").props.onChange({ target: { value: "新的隔离评论" } });
+  submitButton(t.renderFeedback()).props.onClick();
+  const history = JSON.parse(t.entries.get("feedback_history"));
+  assert.equal(history[0].comment, "新的隔离评论"); assert.equal(history[1].rating, "good");
+  assert.ok(!t.requests[0].options.body.includes("隔离评论"));
   assert.deepEqual(t.commands(), []);
 });
-test("评论仅存浏览器本地，不随自建评分发送，百度队列不变", () => {
-  const t = setup({ agreed: true, interactive: true });
-  t.analytics.trackBaiduPageView();const before = t.commands();
-  const tree = chooseRating(t, "好用");
-  findElement(tree, (n) => n.type === "textarea").props.onChange({ target: { value: "仅用于隔离验证的评论" } });
-  submitButton(t.renderFeedback()).props.onClick();
-  assert.equal(JSON.parse(t.entries.get("feedback_history"))[0].comment, "仅用于隔离验证的评论");
-  assert.ok(!t.requests[0].options.body.includes("仅用于隔离验证"));
-  assert.deepEqual(t.commands(), before);
+test("存储不可用或格式损坏不阻塞评价", () => {
+  for (const storageFails of [true, false]) {
+    const t = setup({ storageFails, interactive: true }); t.consent.markConsented();
+    if (!storageFails) t.entries.set("feedback_history", "{}");
+    assert.doesNotThrow(() => submitButton(chooseRating(t)).props.onClick());
+    assert.equal(t.networkCalls(), 1); assert.ok(textOf(t.renderFeedback()).includes("感谢你的评价"));
+  }
 });
-test("自建统计异常不影响反馈感谢界面及已初始化的百度PV", () => {
+test("自建统计异常仍完成界面，不声称数据库入库", () => {
   const t = setup({ agreed: true, interactive: true });
-  t.analytics.trackBaiduPageView();const before = t.commands();
   t.load("src/lib/analytics.ts").trackSurvey = () => { throw Error("blocked"); };
-  assert.doesNotThrow(() => submitButton(chooseRating(t, "好用")).props.onClick());
-  assert.deepEqual(t.commands(), before);
-  assert.ok(textOf(t.renderFeedback()).includes("感谢您的反馈"));
+  assert.doesNotThrow(() => submitButton(chooseRating(t)).props.onClick());
+  const text = textOf(t.renderFeedback());
+  assert.ok(text.includes("感谢你的评价")); assert.ok(!text.includes("已收录"));
 });
-test("百度脚本被拦截不影响自建评分提交", () => {
+test("提交前撤回同意，不保存或发送新评价", () => {
   const t = setup({ agreed: true, interactive: true });
-  t.analytics.trackBaiduPageView();t.scripts[0].onerror();
-  assert.doesNotThrow(() => submitButton(chooseRating(t, "不好用")).props.onClick());
-  assert.equal(t.networkCalls(), 1);
-  assert.equal(JSON.parse(t.requests[0].options.body).rating, "bad");
+  const submit = submitButton(chooseRating(t)).props.onClick;
+  t.consent.revokeConsent(); submit();
+  assert.equal(t.networkCalls(), 0); assert.equal(t.entries.has("feedback_history"), false);
 });
-test("浏览器存储不可用仍可提交评分，不启动额外百度请求", () => {
-  const t = setup({ storageFails: true, interactive: true });t.consent.markConsented();
-  assert.doesNotThrow(() => submitButton(chooseRating(t, "好用")).props.onClick());
-  assert.equal(t.networkCalls(), 1);
-  assert.deepEqual(t.commands(), []);
-  assert.equal(t.scripts.length, 0);
-});
-test("提交前撤回总同意，不再发送评分", () => {
+test("百度脚本被拦截不影响两题评分", () => {
   const t = setup({ agreed: true, interactive: true });
-  const submit = submitButton(chooseRating(t, "好用")).props.onClick;
-  t.consent.revokeConsent();submit();
-  assert.equal(t.networkCalls(), 0);assert.deepEqual(t.commands(), []);
+  t.analytics.trackBaiduPageView(); const before = t.commands(); t.scripts[0].onerror();
+  submitButton(chooseRating(t)).props.onClick();
+  assert.equal(t.networkCalls(), 1); assert.deepEqual(t.commands(), before);
 });
-test("Netlify与本地保留自建评分，不产生百度请求或分享勾选", () => {
+test("Netlify与本地仍仅发送自建统计", () => {
   for (const hostname of ["symptom-checker-app.netlify.app", "localhost"]) {
     const t = setup({ hostname, agreed: true, interactive: true });
-    const tree = chooseRating(t, "好用");assert.equal(shareCheckbox(tree), undefined);
-    submitButton(tree).props.onClick();
-    assert.equal(t.networkCalls(), 1);assert.deepEqual(t.commands(), []);assert.equal(t.scripts.length, 0);
+    submitButton(chooseRating(t)).props.onClick();
+    assert.equal(t.networkCalls(), 1); assert.deepEqual(t.commands(), []); assert.equal(t.scripts.length, 0);
   }
+});
+test("分题分母忽略不适用，三档分布和帮助比例正确", () => {
+  const lib = setup().load("src/lib/feedback.ts");
+  const data = lib.helpDistribution(["very_helpful", "somewhat_helpful", "not_helpful", null]);
+  assert.equal(data.total, 3); assert.equal(data.helpfulRate, 67);
+  assert.deepEqual(Array.from(data.entries, (x) => x.count), [1, 1, 1]);
+  assert.equal(lib.helpDistribution([]).helpfulRate, null);
+});
+test("新评价识别排除旧评分、分诊、不完整及未知版本", () => {
+  const lib = setup().load("src/lib/feedback.ts");
+  const valid = { feedbackType: "expression_help", feedbackVersion: lib.FEEDBACK_VERSION, assessmentId: "x", modelHelp: "very_helpful", questionnaireUsed: false, questionnaireHelp: null, aiOutcome: "failure" };
+  assert.equal(lib.isExpressionFeedback(valid), true);
+  for (const bad of [{ rating: "good" }, { painRest: 1 }, { ...valid, questionnaireUsed: true }, { ...valid, feedbackVersion: "future" }, { ...valid, modelHelp: "good" }]) assert.equal(lib.isExpressionFeedback(bad), false);
+});
+test("CSV新旧分离，保留不适用与版本，正确转义且无评论", () => {
+  const lib = setup().load("src/lib/feedback.ts");
+  const answers = { feedbackType: "expression_help", feedbackVersion: lib.FEEDBACK_VERSION, assessmentId: "x", modelHelp: "not_helpful", questionnaireUsed: false, questionnaireHelp: null, aiOutcome: "failure", comment: "禁止导出" };
+  const rows = [{ rating: null, answers, body_part: '左肩,"前侧"', ts: "2026-10-21" }, { rating: "good", body_part: "旧部位", ts: "2026-10-18" }];
+  const csv = lib.feedbackCsv(rows, "expression");
+  assert.ok(csv.includes('"左肩,""前侧"""')); assert.ok(csv.includes('"false","","failure"'));
+  assert.ok(!csv.includes("旧部位")); assert.ok(!csv.includes("禁止导出"));
+  const old = lib.feedbackCsv(rows, "legacy"); assert.ok(old.includes("旧部位")); assert.ok(!old.includes("expression_help_v1"));
+});
+
+test("前端返回结构检查拒绝空结果与缺字段，保留后端等级", () => {
+  const lib = setup().load("src/lib/analyze-result.ts");
+  const result = { symptomSummary:"测试", suggestions:"测试", disclaimer:"测试", possibleCauses:[], whenToSeeDoctor:[], questionsForDoctor:[], department:null, shouldSeeDoctor:true, severity:"low" };
+  for (const severity of ["low","medium","high"]) assert.equal(lib.isAnalyzeResult({...result,severity}),true);
+  for (const bad of [null,{}, { ...result,possibleCauses:{} }, { ...result,severity:"unknown" }]) assert.equal(lib.isAnalyzeResult(bad),false);
 });
 
 console.log(`\n结果：${results.length} 通过，0 失败`);
